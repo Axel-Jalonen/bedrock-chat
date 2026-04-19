@@ -8,19 +8,18 @@ use eframe::egui;
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
+use crate::message::TokenUsage;
+
 /// Events sent from the background streaming task to the UI
 #[derive(Debug)]
 pub enum StreamToken {
     Delta(String),
-    Done,
+    /// Stream finished with token usage info
+    Done(Option<TokenUsage>),
     Error(String),
 }
 
 /// Build a Bedrock client for the given region.
-///
-/// Auth is handled automatically by the SDK:
-/// - If `AWS_BEARER_TOKEN_BEDROCK` is set (Bedrock API key), it uses bearer auth.
-/// - Otherwise falls back to the standard credential chain (~/.aws, env vars, SSO, IMDS).
 async fn make_client(region: &str) -> Result<aws_sdk_bedrockruntime::Client> {
     let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
         .region(aws_config::Region::new(region.to_string()))
@@ -98,6 +97,7 @@ async fn run_stream(
 
     let resp = req.send().await.context("converse_stream send")?;
     let mut stream = resp.stream;
+    let mut usage: Option<TokenUsage> = None;
 
     loop {
         match stream.recv().await {
@@ -108,15 +108,24 @@ async fn run_stream(
                         ctx.request_repaint();
                     }
                 }
+                StreamEvent::Metadata(meta) => {
+                    if let Some(u) = meta.usage() {
+                        usage = Some(TokenUsage {
+                            input_tokens: u.input_tokens(),
+                            output_tokens: u.output_tokens(),
+                            total_tokens: u.total_tokens(),
+                        });
+                    }
+                }
                 StreamEvent::MessageStop(_) => {
-                    let _ = tx.send(StreamToken::Done);
+                    let _ = tx.send(StreamToken::Done(usage));
                     ctx.request_repaint();
                     break;
                 }
                 _ => {}
             },
             Ok(None) => {
-                let _ = tx.send(StreamToken::Done);
+                let _ = tx.send(StreamToken::Done(usage));
                 ctx.request_repaint();
                 break;
             }
