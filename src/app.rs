@@ -69,148 +69,74 @@ impl Palette {
 }
 fn c(r: u8, g: u8, b: u8) -> egui::Color32 { egui::Color32::from_rgb(r, g, b) }
 
-// ── Particle system ────────────────────────────────────────────────────
-// Particles drift, breathe, and draw faint connections to nearby neighbors.
-// Mouse proximity causes them to gently scatter.
+// ── Burst particle effect ───────────────────────────────────────────────
+// Short-lived particle burst spawned from a point (e.g. the + button on new chat).
 
-struct Particle {
-    x: f32, y: f32,        // normalized 0..1
+struct BurstParticle {
+    x: f32, y: f32,
     vx: f32, vy: f32,
-    base_vx: f32, base_vy: f32,  // original velocity (restored after mouse scatter)
     radius: f32,
-    base_alpha: f32,
-    color_idx: u8,          // 0=accent, 1=accent2, 2=accent3
-    phase: f32,             // unique phase offset for breathing
-    depth: f32,             // 0..1 parallax layer (0=far, 1=near)
+    color_idx: u8,
+    life: f32,     // 0..1, counts down
 }
 
-struct Particles {
-    list: Vec<Particle>,
-    time: f64,
+struct BurstFx {
+    particles: Vec<BurstParticle>,
 }
 
-impl Particles {
-    fn new(count: usize) -> Self {
+impl BurstFx {
+    fn new() -> Self { Self { particles: Vec::new() } }
+
+    /// Spawn a burst of particles from a screen position.
+    fn spawn(&mut self, pos: egui::Pos2, count: usize) {
         let mut rng = rand::thread_rng();
-        Self {
-            list: (0..count).map(|_| {
-                let depth = rng.gen_range(0.2_f32..1.0);
-                let speed = 0.002 + depth * 0.004;
-                let vx = rng.gen_range(-speed..speed);
-                let vy = rng.gen_range(-speed..speed);
-                Particle {
-                    x: rng.gen_range(0.0..1.0), y: rng.gen_range(0.0..1.0),
-                    vx, vy, base_vx: vx, base_vy: vy,
-                    radius: 1.0 + depth * 3.0,
-                    base_alpha: 0.1 + depth * 0.35,
-                    color_idx: rng.gen_range(0..3),
-                    phase: rng.gen_range(0.0..std::f32::consts::TAU),
-                    depth,
-                }
-            }).collect(),
-            time: 0.0,
+        for _ in 0..count {
+            let angle = rng.gen_range(0.0..std::f32::consts::TAU);
+            let speed = rng.gen_range(80.0..250.0);
+            self.particles.push(BurstParticle {
+                x: pos.x, y: pos.y,
+                vx: angle.cos() * speed,
+                vy: angle.sin() * speed,
+                radius: rng.gen_range(1.5..4.0),
+                color_idx: rng.gen_range(0..3),
+                life: 1.0,
+            });
         }
     }
 
-    fn draw(&mut self, painter: &egui::Painter, rect: egui::Rect, pal: &Palette, dt: f32, mouse: Option<egui::Pos2>) {
-        self.time += dt as f64;
-        let t = self.time as f32;
+    /// Returns true if there are active particles (caller should request_repaint).
+    fn draw(&mut self, painter: &egui::Painter, pal: &Palette, dt: f32) -> bool {
+        let decay = 2.5; // life units per second
+        self.particles.retain_mut(|p| {
+            p.life -= decay * dt;
+            if p.life <= 0.0 { return false; }
 
-        // Update positions + mouse interaction
-        for p in &mut self.list {
-            // Mouse repulsion
-            if let Some(mpos) = mouse {
-                let mx = (mpos.x - rect.left()) / rect.width();
-                let my = (mpos.y - rect.top()) / rect.height();
-                let dx = p.x - mx;
-                let dy = p.y - my;
-                let dist_sq = dx * dx + dy * dy;
-                let repel_radius = 0.04; // normalized
-                if dist_sq < repel_radius && dist_sq > 0.0001 {
-                    let dist = dist_sq.sqrt();
-                    let force = ((repel_radius - dist) / repel_radius) * 0.02 * p.depth;
-                    p.vx += (dx / dist) * force;
-                    p.vy += (dy / dist) * force;
-                }
-            }
-
-            // Dampen back toward base velocity
-            p.vx += (p.base_vx - p.vx) * 0.02;
-            p.vy += (p.base_vy - p.vy) * 0.02;
+            // Decelerate
+            p.vx *= 1.0 - 3.0 * dt;
+            p.vy *= 1.0 - 3.0 * dt;
+            // Gravity
+            p.vy += 60.0 * dt;
 
             p.x += p.vx * dt;
             p.y += p.vy * dt;
-            if p.x < -0.02 { p.x += 1.04; } if p.x > 1.02 { p.x -= 1.04; }
-            if p.y < -0.02 { p.y += 1.04; } if p.y > 1.02 { p.y -= 1.04; }
-        }
 
-        // Draw connection lines between nearby particles (only near-layer ones)
-        let connect_dist = 0.12_f32;
-        let connect_dist_sq = connect_dist * connect_dist;
-        let n = self.list.len();
-        for i in 0..n {
-            if self.list[i].depth < 0.5 { continue; } // skip far particles
-            for j in (i + 1)..n {
-                if self.list[j].depth < 0.5 { continue; }
-                let dx = self.list[i].x - self.list[j].x;
-                let dy = self.list[i].y - self.list[j].y;
-                let d2 = dx * dx + dy * dy;
-                if d2 < connect_dist_sq {
-                    let closeness = 1.0 - (d2 / connect_dist_sq);
-                    let alpha = (closeness * 25.0 * self.list[i].depth * self.list[j].depth) as u8;
-                    if alpha > 0 {
-                        let col = Self::particle_color(pal, self.list[i].color_idx);
-                        let line_color = egui::Color32::from_rgba_premultiplied(col.r(), col.g(), col.b(), alpha);
-                        let p1 = egui::pos2(
-                            rect.left() + self.list[i].x * rect.width(),
-                            rect.top() + self.list[i].y * rect.height(),
-                        );
-                        let p2 = egui::pos2(
-                            rect.left() + self.list[j].x * rect.width(),
-                            rect.top() + self.list[j].y * rect.height(),
-                        );
-                        painter.line_segment([p1, p2], egui::Stroke::new(0.5, line_color));
-                    }
-                }
-            }
-        }
-
-        // Draw particles
-        for p in &self.list {
-            let sx = rect.left() + p.x * rect.width();
-            let sy = rect.top() + p.y * rect.height();
-
-            // Breathing: slow sine pulse on alpha
-            let breath = ((t * 0.4 + p.phase).sin() * 0.5 + 0.5) * 0.6 + 0.4;
-            let a = (p.base_alpha * breath * 255.0) as u8;
-
-            let base_col = Self::particle_color(pal, p.color_idx);
-            let color = egui::Color32::from_rgba_premultiplied(base_col.r(), base_col.g(), base_col.b(), a);
-
-            // Outer glow (larger, more transparent)
-            if p.depth > 0.6 {
-                let glow_a = (a as f32 * 0.25) as u8;
-                let glow_col = egui::Color32::from_rgba_premultiplied(base_col.r(), base_col.g(), base_col.b(), glow_a);
-                painter.circle_filled(egui::pos2(sx, sy), p.radius * 2.5, glow_col);
-            }
-
-            painter.circle_filled(egui::pos2(sx, sy), p.radius, color);
-        }
-    }
-
-    fn particle_color(pal: &Palette, idx: u8) -> egui::Color32 {
-        match idx {
-            0 => pal.accent,
-            1 => pal.accent2,
-            _ => pal.accent3,
-        }
+            let a = (p.life * 200.0) as u8;
+            let base = match p.color_idx {
+                0 => pal.accent, 1 => pal.accent2, _ => pal.accent3,
+            };
+            let color = egui::Color32::from_rgba_premultiplied(base.r(), base.g(), base.b(), a);
+            let r = p.radius * (0.5 + p.life * 0.5);
+            painter.circle_filled(egui::pos2(p.x, p.y), r, color);
+            true
+        });
+        !self.particles.is_empty()
     }
 }
 
 // ── App state ──────────────────────────────────────────────────────────
 
 #[derive(Default)]
-struct CredentialForm { api_key: String, region_idx: usize }
+struct CredentialForm { api_key: String, region_idx: usize, is_settings: bool }
 
 enum Screen { Credentials(CredentialForm), Chat }
 
@@ -234,6 +160,7 @@ pub struct ChatApp {
     model_idx: usize,
     region_idx: usize,
     show_system_prompt: bool,
+    system_prompt_draft: String,
     clipboard: Option<arboard::Clipboard>,
 
     conv_usage: TokenUsage,
@@ -241,7 +168,7 @@ pub struct ChatApp {
 
     current_theme: egui::Theme,
     pal: Palette,
-    particles: Particles,
+    burst: BurstFx,
     last_frame_time: Option<f64>,
 
     model_filter: String,
@@ -288,8 +215,8 @@ impl ChatApp {
             md_caches: HashMap::new(), streaming_md_cache: CommonMarkCache::default(),
             input: String::new(), stream_rx: None, is_streaming: false, last_error: None,
             scroll_to_bottom: false, user_scrolled_up: false, model_idx: 0, region_idx: saved_region,
-            show_system_prompt: false, clipboard, conv_usage: TokenUsage::default(),
-            last_usage: None, current_theme: theme, pal, particles: Particles::new(60),
+            show_system_prompt: false, system_prompt_draft: String::new(), clipboard, conv_usage: TokenUsage::default(),
+            last_usage: None, current_theme: theme, pal, burst: BurstFx::new(),
             last_frame_time: None, model_filter: String::new(), ephemeral: false,
             show_search: false, search_query: String::new(), search_results: Vec::new(),
             search_just_opened: false,
@@ -307,12 +234,11 @@ impl ChatApp {
         }
     }
 
-    fn get_dt_and_mouse(&mut self, ui: &egui::Ui) -> (f32, Option<egui::Pos2>) {
+    fn get_dt(&mut self, ui: &egui::Ui) -> f32 {
         let now = ui.input(|i| i.time);
         let dt = self.last_frame_time.map_or(0.016, |t| (now - t) as f32).min(0.1);
         self.last_frame_time = Some(now);
-        let mouse = ui.input(|i| i.pointer.hover_pos());
-        (dt, mouse)
+        dt
     }
 
     // ── Helpers ────────────────────────────────────────────────────────
@@ -334,10 +260,11 @@ impl ChatApp {
             Ok(msgs) => { self.messages = msgs; self.md_caches.clear(); self.scroll_to_bottom = true; }
             Err(e) => { error!("failed to load messages: {e:#}"); self.last_error = Some(format!("Failed to load: {e:#}")); }
         }
-        let conv_data = self.active_conversation().map(|c| (c.model_id.clone(), c.region.clone()));
-        if let Some((model_id, region)) = conv_data {
+        let conv_data = self.active_conversation().map(|c| (c.model_id.clone(), c.region.clone(), c.system_prompt.clone()));
+        if let Some((model_id, region, sys_prompt)) = conv_data {
             if let Some(idx) = MODELS.iter().position(|m| m.id == model_id) { self.model_idx = idx; }
             if let Some(idx) = REGIONS.iter().position(|r| *r == region) { self.region_idx = idx; }
+            self.system_prompt_draft = sys_prompt;
         }
     }
 
@@ -355,6 +282,7 @@ impl ChatApp {
         let id = conv.id.clone();
         self.conversations.insert(0, conv);
         self.select_conversation(&id);
+        self.system_prompt_draft.clear();
     }
 
     fn delete_conversation(&mut self, id: &str) {
@@ -559,21 +487,32 @@ impl ChatApp {
             });
     }
 
-    // ── Credential modal ───────────────────────────────────────────────
+    // ── Settings modal ──────────────────────────────────────────────────
 
-    fn render_credentials_modal(&mut self, ui: &mut egui::Ui) {
+    fn render_credentials_modal(&mut self, ui: &mut egui::Ui, is_settings: bool) {
         let pal = self.pal.clone();
         let rect = ui.max_rect();
         ui.painter().rect_filled(rect, 0.0, pal.bg_base);
-        let (dt, mouse) = self.get_dt_and_mouse(ui);
-        self.particles.draw(ui.painter(), rect, &pal, dt, mouse);
 
         ui.vertical_centered(|ui| {
-            ui.add_space(rect.height() * 0.28);
+            ui.add_space(rect.height() * 0.20);
             egui::Frame::new().inner_margin(egui::Margin::same(32)).corner_radius(16.0)
                 .fill(pal.bg_modal).stroke(egui::Stroke::new(1.0, pal.border)).show(ui, |ui| {
                 ui.set_width(400.0);
-                ui.colored_label(pal.text_primary, egui::RichText::new("Bedrock Chat").size(24.0).strong());
+                
+                // Header with close button if in settings mode
+                ui.horizontal(|ui| {
+                    ui.colored_label(pal.text_primary, egui::RichText::new(if is_settings { "Settings" } else { "Bedrock Chat" }).size(24.0).strong());
+                    if is_settings {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.add(egui::Button::new(egui::RichText::new("\u{2715}").size(16.0).color(pal.text_muted))
+                                .fill(egui::Color32::TRANSPARENT).corner_radius(4.0)).clicked() {
+                                self.screen = Screen::Chat;
+                            }
+                        });
+                    }
+                });
+                
                 ui.add_space(6.0);
                 ui.colored_label(pal.text_secondary, "Paste your Bedrock API key, or skip to use\nyour existing AWS config.");
                 ui.add_space(16.0);
@@ -594,7 +533,7 @@ impl ChatApp {
                     let Screen::Credentials(form) = &self.screen else { return; };
                     let has_key = !form.api_key.trim().is_empty();
                     if ui.add_enabled(has_key, egui::Button::new(
-                        egui::RichText::new("Connect").color(if has_key { pal.bg_base } else { pal.text_muted })
+                        egui::RichText::new("Save").color(if has_key { pal.bg_base } else { pal.text_muted })
                     ).fill(if has_key { pal.accent } else { pal.bg_input }).corner_radius(8.0).min_size(egui::vec2(90.0, 32.0))).clicked() {
                         let Screen::Credentials(form) = &self.screen else { return; };
                         let key = form.api_key.trim().to_string();
@@ -605,17 +544,42 @@ impl ChatApp {
                         self.screen = Screen::Chat;
                     }
                     ui.add_space(8.0);
-                    if ui.add(egui::Button::new(egui::RichText::new("Skip").color(pal.text_secondary))
+                    if ui.add(egui::Button::new(egui::RichText::new(if is_settings { "Cancel" } else { "Skip" }).color(pal.text_secondary))
                         .fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::new(1.0, pal.border)).corner_radius(8.0).min_size(egui::vec2(70.0, 32.0))).clicked() {
                         let Screen::Credentials(form) = &self.screen else { return; };
-                        let _ = self.db.set_config("region", REGIONS[form.region_idx]);
-                        self.region_idx = form.region_idx;
+                        if !is_settings {
+                            let _ = self.db.set_config("region", REGIONS[form.region_idx]);
+                            self.region_idx = form.region_idx;
+                        }
                         self.screen = Screen::Chat;
                     }
                 });
+                
+                // Delete all chats section (only in settings mode)
+                if is_settings {
+                    ui.add_space(24.0);
+                    ui.separator();
+                    ui.add_space(12.0);
+                    ui.colored_label(pal.text_secondary, egui::RichText::new("Danger Zone").size(13.0).strong());
+                    ui.add_space(4.0);
+                    ui.colored_label(pal.text_muted, egui::RichText::new("This only deletes local chat history.\nNo data is stored on AWS.").size(11.0));
+                    ui.add_space(8.0);
+                    if ui.add(egui::Button::new(egui::RichText::new("Delete All Chats").color(pal.error))
+                        .fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::new(1.0, pal.error)).corner_radius(8.0).min_size(egui::vec2(130.0, 32.0))).clicked() {
+                        // Delete all conversations
+                        let ids: Vec<String> = self.conversations.iter().map(|c| c.id.clone()).collect();
+                        for id in ids { let _ = self.db.delete_conversation(&id); }
+                        self.conversations.clear();
+                        self.active_id = None;
+                        self.messages.clear();
+                        self.md_caches.clear();
+                        self.conv_usage = TokenUsage::default();
+                        self.last_usage = None;
+                        info!("deleted all chats");
+                    }
+                }
             });
         });
-        ui.ctx().request_repaint();
     }
 
     // ── Sidebar ────────────────────────────────────────────────────────
@@ -635,12 +599,22 @@ impl ChatApp {
                 // Settings gear button
                 if ui.add(egui::Button::new(egui::RichText::new("\u{2699}").size(16.0).color(pal.text_muted))
                     .fill(egui::Color32::TRANSPARENT).corner_radius(6.0).min_size(egui::vec2(28.0, 28.0))).clicked() {
-                    self.screen = Screen::Credentials(CredentialForm { api_key: String::new(), region_idx: self.region_idx });
+                    self.screen = Screen::Credentials(CredentialForm { api_key: String::new(), region_idx: self.region_idx, is_settings: true });
                 }
                 // New chat button
-                if ui.add(egui::Button::new(egui::RichText::new("+").size(16.0).color(pal.accent))
-                    .fill(egui::Color32::TRANSPARENT).corner_radius(6.0).min_size(egui::vec2(28.0, 28.0))).clicked() {
+                let new_btn = ui.add(egui::Button::new(egui::RichText::new("+").size(16.0).color(pal.accent))
+                    .fill(egui::Color32::TRANSPARENT).corner_radius(6.0).min_size(egui::vec2(28.0, 28.0)));
+                if new_btn.clicked() {
+                    self.burst.spawn(new_btn.rect.center(), 20);
                     self.new_conversation();
+                }
+                // Ephemeral toggle
+                if ui.add(egui::Button::new(egui::RichText::new(if self.ephemeral { "\u{1F576}" } else { "\u{1F441}" }).size(13.0)
+                    .color(if self.ephemeral { pal.accent } else { pal.text_muted }))
+                    .fill(egui::Color32::TRANSPARENT).corner_radius(6.0).min_size(egui::vec2(28.0, 28.0)))
+                    .on_hover_text(if self.ephemeral { "Ephemeral mode ON\n(new chats not saved)" } else { "Click for ephemeral mode" })
+                    .clicked() {
+                    self.ephemeral = !self.ephemeral;
                 }
                 // Search button
                 if ui.add(egui::Button::new(egui::RichText::new("\u{1F50D}").size(13.0).color(pal.text_muted))
@@ -689,8 +663,12 @@ impl ChatApp {
         let pal = self.pal.clone();
         let full_rect = ui.max_rect();
         ui.painter().rect_filled(full_rect, 0.0, pal.bg_base);
-        let (dt, mouse) = self.get_dt_and_mouse(ui);
-        self.particles.draw(ui.painter(), full_rect, &pal, dt, mouse);
+
+        // Draw any active burst particles
+        let dt = self.get_dt(ui);
+        if self.burst.draw(ui.painter(), &pal, dt) {
+            ui.ctx().request_repaint(); // only repaint while burst is active
+        }
 
         if self.active_id.is_none() {
             ui.centered_and_justified(|ui| { ui.colored_label(pal.text_muted, "Select or create a conversation"); });
@@ -717,7 +695,6 @@ impl ChatApp {
         }
 
         self.render_input(ui);
-        ui.ctx().request_repaint();
     }
 
     fn render_top_bar(&mut self, ui: &mut egui::Ui) {
@@ -729,7 +706,9 @@ impl ChatApp {
                 ui.add_space(2.0);
                 let current_name = MODELS[self.model_idx].name;
                 egui::ComboBox::from_id_salt("model_picker").selected_text(current_name).width(220.0).show_ui(ui, |ui| {
-                    ui.add(egui::TextEdit::singleline(&mut self.model_filter).hint_text("Filter models...").desired_width(200.0));
+                    let filter_resp = ui.add(egui::TextEdit::singleline(&mut self.model_filter).hint_text("Filter models...").desired_width(200.0));
+                    // Keep focus on filter when typing
+                    if filter_resp.changed() { filter_resp.request_focus(); }
                     ui.add_space(4.0);
                     let filter = self.model_filter.to_lowercase();
                     let mut last_provider = "";
@@ -740,7 +719,9 @@ impl ChatApp {
                             ui.colored_label(pal.text_muted, egui::RichText::new(m.provider).size(11.0).strong());
                             last_provider = m.provider;
                         }
-                        ui.selectable_value(&mut self.model_idx, i, m.name);
+                        if ui.selectable_value(&mut self.model_idx, i, m.name).clicked() {
+                            self.model_filter.clear();
+                        }
                     }
                 });
 
@@ -758,12 +739,10 @@ impl ChatApp {
                 ui.add_space(8.0);
                 if ui.selectable_label(self.show_system_prompt, "System Prompt").clicked() {
                     self.show_system_prompt = !self.show_system_prompt;
-                }
-
-                // Ephemeral toggle
-                ui.add_space(4.0);
-                if ui.selectable_label(self.ephemeral, "Ephemeral").clicked() {
-                    self.ephemeral = !self.ephemeral;
+                    if self.show_system_prompt {
+                        // Load current system prompt into draft
+                        self.system_prompt_draft = self.active_conversation().map(|c| c.system_prompt.clone()).unwrap_or_default();
+                    }
                 }
 
                 // Compact button
@@ -794,11 +773,19 @@ impl ChatApp {
 
         if self.show_system_prompt {
             egui::Frame::new().fill(pal.bg_topbar).inner_margin(egui::Margin::symmetric(12, 4)).show(ui, |ui| {
-                let mut sys = self.active_conversation().map(|c| c.system_prompt.clone()).unwrap_or_default();
-                if ui.add(egui::TextEdit::multiline(&mut sys).hint_text("Enter system prompt...").desired_rows(2).desired_width(f32::INFINITY)).changed() {
-                    if let Some(conv) = self.active_conversation_mut() { conv.system_prompt = sys; }
-                    if !self.ephemeral { if let Some(conv) = self.active_conversation() { let _ = self.db.upsert_conversation(conv); } }
-                }
+                ui.horizontal(|ui| {
+                    ui.add_sized(egui::vec2(ui.available_width() - 70.0, 50.0),
+                        egui::TextEdit::multiline(&mut self.system_prompt_draft).hint_text("Enter system prompt..."));
+                    let current = self.active_conversation().map(|c| c.system_prompt.clone()).unwrap_or_default();
+                    let changed = self.system_prompt_draft != current;
+                    if ui.add_enabled(changed, egui::Button::new(
+                        egui::RichText::new("Set").color(if changed { pal.bg_base } else { pal.text_muted })
+                    ).fill(if changed { pal.accent } else { pal.bg_input }).corner_radius(6.0).min_size(egui::vec2(50.0, 28.0))).clicked() {
+                        let draft = self.system_prompt_draft.clone();
+                        if let Some(conv) = self.active_conversation_mut() { conv.system_prompt = draft; }
+                        if !self.ephemeral { if let Some(conv) = self.active_conversation() { let _ = self.db.upsert_conversation(conv); } }
+                    }
+                });
             });
         }
     }
@@ -882,8 +869,6 @@ impl ChatApp {
 
     fn render_input(&mut self, ui: &mut egui::Ui) {
         let pal = self.pal.clone();
-        let sc = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::Enter);
-        let sc2 = egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::Enter);
 
         egui::Frame::new().fill(egui::Color32::TRANSPARENT).inner_margin(egui::Margin::symmetric(16, 10)).show(ui, |ui| {
             egui::Frame::new().fill(pal.bg_input).corner_radius(12.0).stroke(egui::Stroke::new(1.0, pal.border)).inner_margin(egui::Margin::symmetric(12, 8)).show(ui, |ui| {
@@ -892,22 +877,21 @@ impl ChatApp {
                     let resp = ui.add_sized(egui::vec2(ui.available_width() - 60.0, 0.0),
                         egui::TextEdit::multiline(&mut self.input).hint_text(egui::RichText::new("Message...").color(pal.text_muted))
                             .desired_rows(rows).lock_focus(true).text_color(pal.text_primary));
-                    let ce = ui.input_mut(|i| i.consume_shortcut(&sc) || i.consume_shortcut(&sc2));
+                    
+                    // Enter sends, Shift+Enter for newline
+                    let enter_pressed = resp.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                    let shift_held = ui.input(|i| i.modifiers.shift);
+                    let should_send = enter_pressed && !shift_held;
+                    
+                    // Strip trailing newline that egui adds on Enter
+                    if should_send && self.input.ends_with('\n') {
+                        self.input.pop();
+                    }
+                    
                     let can = !self.is_streaming && !self.is_compacting && !self.input.trim().is_empty();
                     let bc = if can { pal.accent } else { pal.accent_dim };
                     let clicked = ui.add(egui::Button::new(egui::RichText::new("Send").color(if can { pal.bg_base } else { pal.text_muted }).size(13.0)).fill(bc).corner_radius(8.0).min_size(egui::vec2(52.0, 30.0))).clicked();
-                    if (ce || clicked) && can { let ctx = ui.ctx().clone(); self.send_message(&ctx); }
-                    // Only grab focus if nothing else has it.
-                    // This prevents stealing from search, system prompt, model filter, etc.
-                    if !self.is_streaming {
-                        let dominated = self.show_search || self.show_system_prompt;
-                        let someone_else_focused = ui.ctx().memory(|m| {
-                            m.focused().is_some_and(|id| id != resp.id)
-                        });
-                        if !dominated && !someone_else_focused {
-                            resp.request_focus();
-                        }
-                    }
+                    if (should_send || clicked) && can { let ctx = ui.ctx().clone(); self.send_message(&ctx); }
                 });
             });
         });
@@ -989,7 +973,10 @@ impl eframe::App for ChatApp {
         }
 
         match &self.screen {
-            Screen::Credentials(_) => { self.render_credentials_modal(ui); }
+            Screen::Credentials(ref form) => { 
+                let is_settings = form.is_settings;
+                self.render_credentials_modal(ui, is_settings); 
+            }
             Screen::Chat => {
                 self.poll_stream();
                 egui::Panel::left("sidebar").default_size(240.0).min_size(180.0)
