@@ -527,6 +527,13 @@ impl ChatApp {
             .map(|(i, _)| i)
             .collect();
         
+        // Ensure hover index is valid and set to first if none
+        if !filtered.is_empty() {
+            if self.model_picker_hover_idx.is_none() || !filtered.contains(&self.model_picker_hover_idx.unwrap()) {
+                self.model_picker_hover_idx = Some(filtered[0]);
+            }
+        }
+        
         // Handle keyboard navigation
         if !filtered.is_empty() {
             let current_pos = self.model_picker_hover_idx
@@ -575,7 +582,7 @@ impl ChatApp {
                 egui::Frame::new().fill(pal.bg_modal).corner_radius(12.0)
                     .stroke(egui::Stroke::new(1.0, pal.border))
                     .inner_margin(egui::Margin::same(16)).show(ui, |ui| {
-                    ui.set_width(300.0);
+                    ui.set_width(320.0);
                     
                     let filter_resp = ui.add(egui::TextEdit::singleline(&mut self.model_filter)
                         .hint_text("Filter models...").desired_width(f32::INFINITY));
@@ -583,13 +590,15 @@ impl ChatApp {
                     
                     ui.add_space(8.0);
                     
-                    egui::ScrollArea::vertical().max_height(400.0).show(ui, |ui| {
+                    egui::ScrollArea::vertical().max_height(500.0).auto_shrink([false, false]).show(ui, |ui| {
+                        ui.set_width(ui.available_width());
                         let mut last_provider = "";
                         for &model_idx in &filtered {
                             let m = &MODELS[model_idx];
                             if m.provider != last_provider {
-                                if !last_provider.is_empty() { ui.add_space(4.0); }
+                                if !last_provider.is_empty() { ui.add_space(6.0); }
                                 ui.colored_label(pal.text_muted, egui::RichText::new(m.provider).size(11.0).strong());
+                                ui.add_space(2.0);
                                 last_provider = m.provider;
                             }
                             
@@ -597,21 +606,23 @@ impl ChatApp {
                             let is_current = self.model_idx == model_idx;
                             let bg = if is_selected { pal.selected } else if is_current { pal.hover } else { egui::Color32::TRANSPARENT };
                             
-                            egui::Frame::new().fill(bg).corner_radius(4.0).inner_margin(egui::Margin::symmetric(6, 3)).show(ui, |ui| {
+                            let frame_resp = egui::Frame::new().fill(bg).corner_radius(4.0).inner_margin(egui::Margin::symmetric(8, 4)).show(ui, |ui| {
+                                ui.set_width(ui.available_width());
                                 let text_color = if is_current { pal.accent } else { pal.text_primary };
-                                let resp = ui.add(egui::Label::new(
+                                ui.add(egui::Label::new(
                                     egui::RichText::new(m.name).color(text_color).size(13.0)
-                                ).selectable(false).sense(egui::Sense::click()));
-                                
-                                if resp.clicked() {
-                                    self.model_idx = model_idx;
-                                    self.show_model_picker = false;
-                                    self.model_filter.clear();
-                                }
-                                if resp.hovered() {
-                                    self.model_picker_hover_idx = Some(model_idx);
-                                }
+                                ).selectable(false));
                             });
+                            
+                            let resp = ui.interact(frame_resp.response.rect, egui::Id::new(("model", model_idx)), egui::Sense::click());
+                            if resp.clicked() {
+                                self.model_idx = model_idx;
+                                self.show_model_picker = false;
+                                self.model_filter.clear();
+                            }
+                            if resp.hovered() {
+                                self.model_picker_hover_idx = Some(model_idx);
+                            }
                         }
                         
                         if filtered.is_empty() {
@@ -743,13 +754,18 @@ impl ChatApp {
                     self.burst.spawn(new_btn.rect.center(), 20);
                     self.new_conversation();
                 }
-                // Ephemeral toggle
-                if ui.add(egui::Button::new(egui::RichText::new(if self.ephemeral { "\u{1F576}" } else { "\u{1F441}" }).size(13.0)
+                // Ephemeral toggle - also creates new chat when turning on
+                let eph_btn = ui.add(egui::Button::new(egui::RichText::new(if self.ephemeral { "*" } else { "o" }).size(13.0)
                     .color(if self.ephemeral { pal.accent } else { pal.text_muted }))
                     .fill(egui::Color32::TRANSPARENT).corner_radius(6.0).min_size(egui::vec2(28.0, 28.0)))
-                    .on_hover_text(if self.ephemeral { "Ephemeral mode ON\n(new chats not saved)" } else { "Click for ephemeral mode" })
-                    .clicked() {
+                    .on_hover_text(if self.ephemeral { "Ephemeral mode ON\n(chats not saved)" } else { "Click for ephemeral chat" });
+                if eph_btn.clicked() {
                     self.ephemeral = !self.ephemeral;
+                    if self.ephemeral {
+                        // Create a new ephemeral chat
+                        self.burst.spawn(eph_btn.rect.center(), 20);
+                        self.new_conversation();
+                    }
                 }
                 // Search button
                 if ui.add(egui::Button::new(egui::RichText::new("\u{1F50D}").size(13.0).color(pal.text_muted))
@@ -771,21 +787,28 @@ impl ChatApp {
                 let is_active = active_id.as_deref() == Some(&conv.id);
                 let bg = if is_active { pal.selected } else { egui::Color32::TRANSPARENT };
                 let title: String = if conv.title.chars().count() > 28 { conv.title.chars().take(25).collect::<String>() + "..." } else { conv.title.clone() };
-                egui::Frame::new().fill(bg).corner_radius(8.0).inner_margin(egui::Margin::symmetric(10, 6)).outer_margin(egui::Margin::symmetric(4, 1)).show(ui, |ui| {
+                let conv_id = conv.id.clone();
+                
+                let frame_resp = egui::Frame::new().fill(bg).corner_radius(8.0).inner_margin(egui::Margin::symmetric(10, 6)).outer_margin(egui::Margin::symmetric(4, 1)).show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.horizontal(|ui| {
                         let tc = if is_active { pal.text_primary } else { pal.text_secondary };
-                        let resp = ui.add(egui::Label::new(egui::RichText::new(&title).color(tc).size(13.0)).selectable(false).sense(egui::Sense::click()));
-                        if resp.clicked() && !is_active { to_select = Some(conv.id.clone()); }
+                        ui.add(egui::Label::new(egui::RichText::new(&title).color(tc).size(13.0)).selectable(false));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if is_active || ui.rect_contains_pointer(ui.max_rect()) {
                                 if ui.add(egui::Button::new(egui::RichText::new("x").color(pal.text_muted).size(12.0)).fill(egui::Color32::TRANSPARENT).min_size(egui::vec2(20.0, 20.0))).clicked() {
-                                    to_delete = Some(conv.id.clone());
+                                    to_delete = Some(conv_id.clone());
                                 }
                             }
                         });
                     });
                 });
+                
+                // Make entire row clickable
+                let row_resp = ui.interact(frame_resp.response.rect, egui::Id::new(("conv_row", &conv_id)), egui::Sense::click());
+                if row_resp.clicked() && !is_active && to_delete.is_none() {
+                    to_select = Some(conv_id);
+                }
             }
         });
         if let Some(id) = to_select { self.select_conversation(&id); }
@@ -841,9 +864,9 @@ impl ChatApp {
                 ui.add_space(2.0);
                 let current_name = MODELS[self.model_idx].name;
                 
-                // Custom model picker button
+                // Custom model picker button (use simple "v" for caret)
                 let btn_resp = ui.add(egui::Button::new(
-                    egui::RichText::new(format!("{} \u{25BC}", current_name)).color(pal.text_primary)
+                    egui::RichText::new(format!("{}  v", current_name)).color(pal.text_primary)
                 ).fill(pal.bg_input).stroke(egui::Stroke::new(1.0, pal.border)).corner_radius(6.0).min_size(egui::vec2(220.0, 24.0)));
                 
                 if btn_resp.clicked() {
