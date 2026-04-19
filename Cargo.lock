@@ -853,6 +853,7 @@ dependencies = [
  "anyhow",
  "arboard",
  "aws-config",
+ "aws-credential-types",
  "aws-sdk-bedrockruntime",
  "chrono",
  "eframe",

@@ -5,65 +5,58 @@ use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
-use crate::bedrock::{self, StreamToken};
+use crate::bedrock::{self, AwsCreds, StreamToken};
 use crate::db::Database;
 use crate::message::{ChatMessage, Conversation, Role, MODELS, REGIONS};
 
+// ── Credential modal state ─────────────────────────────────────────────
+
+#[derive(Default)]
+struct CredentialForm {
+    access_key: String,
+    secret_key: String,
+    session_token: String,
+    region_idx: usize,
+}
+
 // ── App state ──────────────────────────────────────────────────────────
 
+enum Screen {
+    /// Show the credential modal before anything else
+    Credentials(CredentialForm),
+    /// Main chat UI
+    Chat,
+}
+
 pub struct ChatApp {
-    /// Tokio runtime handle for spawning async work
     rt: tokio::runtime::Handle,
-
-    /// SQLite database
     db: Database,
+    screen: Screen,
 
-    /// All conversations (sidebar list)
+    /// Resolved AWS credentials (None = use default chain)
+    aws_creds: AwsCreds,
+
     conversations: Vec<Conversation>,
-
-    /// Currently selected conversation ID
     active_id: Option<String>,
-
-    /// Messages for the active conversation
     messages: Vec<ChatMessage>,
-
-    /// Per-message markdown cache keyed by message_id.
-    /// Stores (version, cache) so we know when to re-parse.
     md_caches: HashMap<String, (u64, CommonMarkCache)>,
-
-    /// Markdown cache for the currently-streaming message
     streaming_md_cache: CommonMarkCache,
-
-    /// Input text for the compose box
     input: String,
-
-    /// Active streaming receiver (None when idle)
     stream_rx: Option<mpsc::UnboundedReceiver<StreamToken>>,
-
-    /// Whether we're currently waiting for a response
     is_streaming: bool,
-
-    /// Error to display
     last_error: Option<String>,
-
-    /// Scroll to bottom flag
     scroll_to_bottom: bool,
-
-    /// Selected model index
     model_idx: usize,
-
-    /// Selected region index
     region_idx: usize,
-
-    /// Whether the system prompt editor is open
     show_system_prompt: bool,
-
-    /// Clipboard context
     clipboard: Option<arboard::Clipboard>,
 }
 
 impl ChatApp {
     pub fn new(cc: &eframe::CreationContext<'_>, rt: tokio::runtime::Handle) -> Self {
+        // Use dark theme with readable defaults
+        cc.egui_ctx.set_visuals(egui::Visuals::dark());
+
         let mut style = (*cc.egui_ctx.global_style()).clone();
         style.spacing.item_spacing = egui::vec2(8.0, 6.0);
         cc.egui_ctx.set_global_style(style);
@@ -85,6 +78,8 @@ impl ChatApp {
         Self {
             rt,
             db,
+            screen: Screen::Credentials(CredentialForm::default()),
+            aws_creds: AwsCreds::DefaultChain,
             conversations,
             active_id: None,
             messages: Vec::new(),
@@ -128,8 +123,9 @@ impl ChatApp {
                 self.last_error = Some(format!("Failed to load messages: {e:#}"));
             }
         }
-        // Sync model/region from conversation — extract values first to avoid borrow conflicts
-        let conv_data = self.active_conversation().map(|c| (c.model_id.clone(), c.region.clone()));
+        let conv_data = self
+            .active_conversation()
+            .map(|c| (c.model_id.clone(), c.region.clone()));
         if let Some((model_id, region)) = conv_data {
             if let Some(idx) = MODELS.iter().position(|(_, mid)| *mid == model_id) {
                 self.model_idx = idx;
@@ -184,7 +180,6 @@ impl ChatApp {
             }
         };
 
-        // Add user message
         let user_msg = ChatMessage::new(&conv_id, Role::User, &text);
         if let Err(e) = self.db.insert_message(&user_msg) {
             error!("failed to insert user message: {e:#}");
@@ -194,27 +189,23 @@ impl ChatApp {
         self.messages.push(user_msg);
         self.input.clear();
 
-        // Update conversation title from first message
         if self.messages.len() == 1 {
             let title: String = text.chars().take(50).collect();
             if let Some(conv) = self.active_conversation_mut() {
                 conv.title = title;
                 conv.updated_at = chrono::Utc::now();
             }
-            // Persist outside the mutable borrow
             if let Some(conv) = self.active_conversation() {
                 let _ = self.db.upsert_conversation(conv);
             }
         }
 
-        // Create placeholder assistant message
         let assistant_msg = ChatMessage::new(&conv_id, Role::Assistant, "");
         if let Err(e) = self.db.insert_message(&assistant_msg) {
             error!("failed to insert assistant message: {e:#}");
         }
         self.messages.push(assistant_msg);
 
-        // Build history for the API (exclude the empty assistant placeholder)
         let history: Vec<(String, String)> = self
             .messages
             .iter()
@@ -222,7 +213,6 @@ impl ChatApp {
             .map(|m| (m.role.as_str().to_string(), m.content.clone()))
             .collect();
 
-        // Get model/region from conversation
         let conv_info = self
             .active_conversation()
             .map(|c| (c.model_id.clone(), c.region.clone(), c.system_prompt.clone()));
@@ -235,6 +225,7 @@ impl ChatApp {
         let rx = bedrock::spawn_stream(
             &self.rt,
             ctx.clone(),
+            self.aws_creds.clone(),
             model_id,
             region,
             system_prompt,
@@ -245,14 +236,12 @@ impl ChatApp {
         self.scroll_to_bottom = true;
     }
 
-    /// Poll the streaming channel for new tokens (non-blocking)
     fn poll_stream(&mut self) {
         let rx = match &mut self.stream_rx {
             Some(rx) => rx,
             None => return,
         };
 
-        // Drain all available tokens this frame
         loop {
             match rx.try_recv() {
                 Ok(StreamToken::Delta(text)) => {
@@ -285,7 +274,6 @@ impl ChatApp {
         self.is_streaming = false;
         self.stream_rx = None;
 
-        // Persist final assistant message content
         if let Some(msg) = self.messages.last() {
             if msg.role == Role::Assistant {
                 if let Err(e) = self.db.update_message_content(&msg.id, &msg.content) {
@@ -294,7 +282,6 @@ impl ChatApp {
             }
         }
 
-        // Update conversation timestamp — clone data to avoid borrow conflicts
         if let Some(conv) = self.active_conversation_mut() {
             conv.updated_at = chrono::Utc::now();
         }
@@ -311,7 +298,115 @@ impl ChatApp {
         }
     }
 
-    // ── UI Rendering ───────────────────────────────────────────────────
+    // ── Credential modal ───────────────────────────────────────────────
+
+    fn render_credentials_modal(&mut self, ui: &mut egui::Ui) {
+        ui.vertical_centered(|ui| {
+            ui.add_space(ui.available_height() / 4.0);
+
+            egui::Frame::new()
+                .inner_margin(egui::Margin::same(24))
+                .corner_radius(12.0)
+                .fill(ui.visuals().window_fill)
+                .stroke(ui.visuals().window_stroke)
+                .show(ui, |ui| {
+                    ui.set_width(400.0);
+                    ui.heading("AWS Credentials");
+                    ui.add_space(8.0);
+                    ui.label("Enter credentials or leave blank to use the default chain\n(~/.aws/credentials, env vars, SSO).");
+                    ui.add_space(12.0);
+
+                    // We need to pull the form out of self.screen to avoid borrow issues
+                    let Screen::Credentials(form) = &mut self.screen else {
+                        return;
+                    };
+
+                    egui::Grid::new("cred_grid")
+                        .num_columns(2)
+                        .spacing([8.0, 8.0])
+                        .show(ui, |ui| {
+                            ui.label("Access Key ID:");
+                            ui.add(
+                                egui::TextEdit::singleline(&mut form.access_key)
+                                    .desired_width(280.0)
+                                    .hint_text("AKIA..."),
+                            );
+                            ui.end_row();
+
+                            ui.label("Secret Access Key:");
+                            ui.add(
+                                egui::TextEdit::singleline(&mut form.secret_key)
+                                    .desired_width(280.0)
+                                    .password(true)
+                                    .hint_text("wJalr..."),
+                            );
+                            ui.end_row();
+
+                            ui.label("Session Token:");
+                            ui.add(
+                                egui::TextEdit::singleline(&mut form.session_token)
+                                    .desired_width(280.0)
+                                    .password(true)
+                                    .hint_text("(optional)"),
+                            );
+                            ui.end_row();
+
+                            ui.label("Region:");
+                            egui::ComboBox::from_id_salt("cred_region")
+                                .selected_text(REGIONS[form.region_idx])
+                                .show_ui(ui, |ui| {
+                                    for (i, region) in REGIONS.iter().enumerate() {
+                                        ui.selectable_value(&mut form.region_idx, i, *region);
+                                    }
+                                });
+                            ui.end_row();
+                        });
+
+                    ui.add_space(16.0);
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Use Default Chain").clicked() {
+                            // Grab region before we replace screen
+                            let Screen::Credentials(form) = &self.screen else {
+                                return;
+                            };
+                            self.region_idx = form.region_idx;
+                            self.aws_creds = AwsCreds::DefaultChain;
+                            self.screen = Screen::Chat;
+                        }
+
+                        let Screen::Credentials(form) = &self.screen else {
+                            return;
+                        };
+                        let has_keys =
+                            !form.access_key.trim().is_empty() && !form.secret_key.trim().is_empty();
+
+                        if ui
+                            .add_enabled(has_keys, egui::Button::new("Connect"))
+                            .clicked()
+                        {
+                            let Screen::Credentials(form) = &self.screen else {
+                                return;
+                            };
+                            let token = if form.session_token.trim().is_empty() {
+                                None
+                            } else {
+                                Some(form.session_token.trim().to_string())
+                            };
+                            self.region_idx = form.region_idx;
+                            self.aws_creds = AwsCreds::Explicit {
+                                access_key: form.access_key.trim().to_string(),
+                                secret_key: form.secret_key.trim().to_string(),
+                                session_token: token,
+                            };
+                            self.screen = Screen::Chat;
+                        }
+                    });
+                });
+        });
+    }
+
+    // ── Main chat UI ───────────────────────────────────────────────────
 
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
@@ -360,11 +455,9 @@ impl ChatApp {
             return;
         }
 
-        // Top bar: model picker, region picker, system prompt toggle
         self.render_top_bar(ui);
         ui.separator();
 
-        // Message list (takes remaining space minus input box)
         let input_area_height = 120.0;
         let avail = ui.available_height() - input_area_height;
         ui.allocate_ui(egui::vec2(ui.available_width(), avail.max(100.0)), |ui| {
@@ -373,21 +466,18 @@ impl ChatApp {
 
         ui.separator();
 
-        // Error display
         if let Some(err) = self.last_error.clone() {
-            ui.colored_label(egui::Color32::RED, &err);
+            ui.colored_label(egui::Color32::from_rgb(255, 100, 100), &err);
             if ui.small_button("dismiss").clicked() {
                 self.last_error = None;
             }
         }
 
-        // Input box
         self.render_input(ui);
     }
 
     fn render_top_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            // Model picker
             ui.label("Model:");
             let current_model_name = MODELS[self.model_idx].0;
             egui::ComboBox::from_id_salt("model_picker")
@@ -398,7 +488,6 @@ impl ChatApp {
                     }
                 });
 
-            // Region picker
             ui.label("Region:");
             let current_region = REGIONS[self.region_idx];
             egui::ComboBox::from_id_salt("region_picker")
@@ -409,7 +498,6 @@ impl ChatApp {
                     }
                 });
 
-            // System prompt toggle
             if ui
                 .selectable_label(self.show_system_prompt, "System Prompt")
                 .clicked()
@@ -418,7 +506,6 @@ impl ChatApp {
             }
         });
 
-        // Sync model/region back to conversation after combo box interaction
         let model_id = MODELS[self.model_idx].1.to_string();
         let region = REGIONS[self.region_idx].to_string();
         if let Some(conv) = self.active_conversation_mut() {
@@ -431,7 +518,6 @@ impl ChatApp {
             let _ = self.db.upsert_conversation(conv);
         }
 
-        // System prompt editor
         if self.show_system_prompt {
             let mut sys = self
                 .active_conversation()
@@ -485,9 +571,11 @@ impl ChatApp {
             Role::Assistant => "Assistant",
         };
 
+        // Theme-aware colors: slight tint over the panel background
+        let base = ui.visuals().window_fill;
         let bg_color = match role {
-            Role::User => egui::Color32::from_rgba_premultiplied(40, 40, 60, 255),
-            Role::Assistant => egui::Color32::from_rgba_premultiplied(30, 30, 30, 255),
+            Role::User => tint_color(base, egui::Color32::from_rgb(60, 80, 140), 0.12),
+            Role::Assistant => base,
         };
 
         let content_empty = self.messages[idx].content.is_empty();
@@ -501,7 +589,7 @@ impl ChatApp {
             .fill(bg_color)
             .corner_radius(8.0)
             .inner_margin(egui::Margin::same(12))
-            .outer_margin(egui::Margin::symmetric(0, 4))
+            .outer_margin(egui::Margin::symmetric(0, 3))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
 
@@ -524,7 +612,6 @@ impl ChatApp {
                 if content_empty && is_streaming {
                     ui.label("...");
                 } else if !content_empty {
-                    // We need to get a reference to content that outlives the borrow of md_caches
                     let content = self.messages[idx].content.clone();
                     if is_streaming {
                         CommonMarkViewer::new()
@@ -539,15 +626,13 @@ impl ChatApp {
                         if entry.0 != version {
                             *entry = (version, CommonMarkCache::default());
                         }
-                        CommonMarkViewer::new()
-                            .show(ui, &mut entry.1, &content);
+                        CommonMarkViewer::new().show(ui, &mut entry.1, &content);
                     }
                 }
             });
     }
 
     fn render_input(&mut self, ui: &mut egui::Ui) {
-        // Ctrl+Enter or Cmd+Enter to send
         let send_shortcut = egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::Enter);
         let send_shortcut_ctrl =
             egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::Enter);
@@ -580,7 +665,6 @@ impl ChatApp {
                 self.send_message(&ctx);
             }
 
-            // Keep focus on the text input
             if !self.is_streaming {
                 response.request_focus();
             }
@@ -588,22 +672,43 @@ impl ChatApp {
     }
 }
 
-// ── eframe::App implementation ──────────────────────────────────────────
+// ── Color helper ────────────────────────────────────────────────────────
+
+/// Blend `base` toward `tint` by `amount` (0.0 = pure base, 1.0 = pure tint).
+fn tint_color(base: egui::Color32, tint: egui::Color32, amount: f32) -> egui::Color32 {
+    let lerp = |a: u8, b: u8| -> u8 {
+        let v = a as f32 * (1.0 - amount) + b as f32 * amount;
+        v.round() as u8
+    };
+    egui::Color32::from_rgb(
+        lerp(base.r(), tint.r()),
+        lerp(base.g(), tint.g()),
+        lerp(base.b(), tint.b()),
+    )
+}
+
+// ── eframe::App ─────────────────────────────────────────────────────────
 
 impl eframe::App for ChatApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        // Poll streaming tokens before rendering
-        self.poll_stream();
+        match &self.screen {
+            Screen::Credentials(_) => {
+                self.render_credentials_modal(ui);
+            }
+            Screen::Chat => {
+                self.poll_stream();
 
-        egui::Panel::left("sidebar")
-            .default_size(220.0)
-            .min_size(150.0)
-            .show_inside(ui, |ui| {
-                self.render_sidebar(ui);
-            });
+                egui::Panel::left("sidebar")
+                    .default_size(220.0)
+                    .min_size(150.0)
+                    .show_inside(ui, |ui| {
+                        self.render_sidebar(ui);
+                    });
 
-        egui::CentralPanel::default().show_inside(ui, |ui| {
-            self.render_chat_pane(ui);
-        });
+                egui::CentralPanel::default().show_inside(ui, |ui| {
+                    self.render_chat_pane(ui);
+                });
+            }
+        }
     }
 }
