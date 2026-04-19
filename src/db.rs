@@ -181,4 +181,45 @@ impl Database {
         )?;
         Ok(())
     }
+
+    // ── Search ─────────────────────────────────────────────────────────
+
+    /// Search conversations and messages for a query string.
+    /// Returns (conversation_id, conversation_title, matching_snippet).
+    pub fn search(&self, query: &str) -> Result<Vec<(String, String, String)>> {
+        let like = format!("%{query}%");
+        let mut results = Vec::new();
+
+        // Search conversation titles
+        let mut stmt = self.conn.prepare(
+            "SELECT id, title FROM conversations WHERE title LIKE ?1 ORDER BY updated_at DESC LIMIT 20",
+        )?;
+        let rows = stmt.query_map(params![like], |row| {
+            let id: String = row.get(0)?;
+            let title: String = row.get(1)?;
+            Ok((id, title.clone(), title))
+        })?;
+        for r in rows.flatten() {
+            results.push(r);
+        }
+
+        // Search message content
+        let mut stmt = self.conn.prepare(
+            "SELECT m.conversation_id, c.title, substr(m.content, 1, 120)
+             FROM messages m JOIN conversations c ON c.id = m.conversation_id
+             WHERE m.content LIKE ?1 ORDER BY m.created_at DESC LIMIT 30",
+        )?;
+        let rows = stmt.query_map(params![like], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?;
+        for r in rows.flatten() {
+            results.push(r);
+        }
+
+        // Deduplicate by conversation_id, keeping first occurrence
+        let mut seen = std::collections::HashSet::new();
+        results.retain(|(id, _, _)| seen.insert(id.clone()));
+
+        Ok(results)
+    }
 }
