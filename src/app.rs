@@ -174,6 +174,7 @@ pub struct ChatApp {
     model_filter: String,
     show_model_picker: bool,
     model_picker_hover_idx: Option<usize>,
+    model_picker_btn_rect: Option<egui::Rect>,
     ephemeral: bool,
 
     show_search: bool,
@@ -221,7 +222,7 @@ impl ChatApp {
             show_system_prompt: false, system_prompt_draft: String::new(), clipboard, conv_usage: TokenUsage::default(),
             last_usage: None, current_theme: theme, pal, burst: BurstFx::new(),
             last_frame_time: None, model_filter: String::new(), show_model_picker: false,
-            model_picker_hover_idx: None, ephemeral: false,
+            model_picker_hover_idx: None, model_picker_btn_rect: None, ephemeral: false,
             show_search: false, search_query: String::new(), search_results: Vec::new(),
             search_just_opened: false, search_selected_idx: 0,
             is_compacting: false, compact_rx: None,
@@ -601,7 +602,7 @@ impl ChatApp {
             });
         
         egui::Area::new(egui::Id::new("model_picker_popup"))
-            .fixed_pos(egui::pos2(100.0, 60.0))
+            .fixed_pos(self.model_picker_btn_rect.map(|r| egui::pos2(r.left(), r.bottom() + 4.0)).unwrap_or(egui::pos2(100.0, 60.0)))
             .order(egui::Order::Foreground)
             .show(ui.ctx(), |ui| {
                 egui::Frame::new().fill(pal.bg_modal).corner_radius(12.0)
@@ -779,7 +780,7 @@ impl ChatApp {
                     self.burst.spawn(new_btn.rect.center(), 20);
                     self.new_conversation();
                 }
-                // Ephemeral toggle - also creates new chat when turning on
+                // Ephemeral toggle - creates new chat only when turning on AND current chat has messages
                 let eph_label = if self.ephemeral { "~" } else { "~" };
                 let eph_btn = ui.add(egui::Button::new(egui::RichText::new(eph_label).size(14.0)
                     .color(if self.ephemeral { pal.accent } else { pal.text_muted }))
@@ -787,10 +788,18 @@ impl ChatApp {
                     .corner_radius(6.0).min_size(egui::vec2(28.0, 28.0)))
                     .on_hover_text(if self.ephemeral { "Ephemeral ON (click to exit)" } else { "New ephemeral chat" });
                 if eph_btn.clicked() {
-                    self.ephemeral = !self.ephemeral;
-                    if self.ephemeral {
-                        self.burst.spawn(eph_btn.rect.center(), 20);
-                        self.new_conversation();
+                    if !self.ephemeral {
+                        // Turning ON ephemeral - only create new chat if current has messages
+                        self.ephemeral = true;
+                        if self.messages.is_empty() && self.active_id.is_some() {
+                            // Already in empty chat, just mark it ephemeral (it won't be saved)
+                        } else {
+                            self.burst.spawn(eph_btn.rect.center(), 20);
+                            self.new_conversation();
+                        }
+                    } else {
+                        // Turning OFF ephemeral
+                        self.ephemeral = false;
                     }
                 }
                 // Search button
@@ -814,34 +823,45 @@ impl ChatApp {
         egui::ScrollArea::vertical().show(ui, |ui| {
             for conv in &self.conversations {
                 let is_active = active_id.as_deref() == Some(&conv.id);
-                let bg = if is_active { pal.selected } else { egui::Color32::TRANSPARENT };
-                let title: String = if conv.title.chars().count() > 28 { conv.title.chars().take(25).collect::<String>() + "..." } else { conv.title.clone() };
                 let conv_id = conv.id.clone();
+                let title: String = if conv.title.chars().count() > 28 { conv.title.chars().take(25).collect::<String>() + "..." } else { conv.title.clone() };
                 
+                let row_rect = ui.available_rect_before_wrap();
+                let is_hovered = ui.rect_contains_pointer(egui::Rect::from_min_size(
+                    row_rect.min, egui::vec2(ui.available_width(), 32.0)
+                ));
+                let bg = if is_active { pal.selected } else if is_hovered { pal.hover } else { egui::Color32::TRANSPARENT };
+                
+                let mut delete_clicked = false;
                 let frame_resp = egui::Frame::new().fill(bg).corner_radius(8.0).inner_margin(egui::Margin::symmetric(10, 6)).outer_margin(egui::Margin::symmetric(4, 1)).show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.horizontal(|ui| {
                         let tc = if is_active { pal.text_primary } else { pal.text_secondary };
                         ui.add(egui::Label::new(egui::RichText::new(&title).color(tc).size(13.0)).selectable(false));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if is_active || ui.rect_contains_pointer(ui.max_rect()) {
-                                if ui.add(egui::Button::new(egui::RichText::new("x").color(pal.text_muted).size(12.0)).fill(egui::Color32::TRANSPARENT).min_size(egui::vec2(20.0, 20.0))).clicked() {
-                                    to_delete = Some(conv_id.clone());
-                                }
+                            // Always allocate space for button to prevent layout shift
+                            let btn_color = if is_active || is_hovered { pal.text_muted } else { egui::Color32::TRANSPARENT };
+                            if ui.add(egui::Button::new(egui::RichText::new("x").color(btn_color).size(12.0))
+                                .fill(egui::Color32::TRANSPARENT).min_size(egui::vec2(20.0, 20.0))).clicked() {
+                                delete_clicked = true;
                             }
                         });
                     });
                 });
                 
-                // Make entire row clickable
-                let row_resp = ui.interact(frame_resp.response.rect, egui::Id::new(("conv_row", &conv_id)), egui::Sense::click());
-                if row_resp.clicked() && !is_active && to_delete.is_none() {
-                    to_select = Some(conv_id);
+                if delete_clicked {
+                    to_delete = Some(conv_id.clone());
+                } else {
+                    // Make entire row clickable (but not if delete was clicked)
+                    let row_resp = ui.interact(frame_resp.response.rect, egui::Id::new(("conv_row", &conv_id)), egui::Sense::click());
+                    if row_resp.clicked() && !is_active {
+                        to_select = Some(conv_id);
+                    }
                 }
             }
         });
-        if let Some(id) = to_select { self.select_conversation(&id); }
         if let Some(id) = to_delete { self.delete_conversation(&id); }
+        if let Some(id) = to_select { self.select_conversation(&id); }
     }
 
     // ── Chat pane ──────────────────────────────────────────────────────
@@ -925,6 +945,9 @@ impl ChatApp {
                 let btn_resp = ui.add(egui::Button::new(
                     egui::RichText::new(format!("{}  v", current_name)).color(pal.text_primary)
                 ).fill(pal.bg_input).stroke(egui::Stroke::new(1.0, pal.border)).corner_radius(6.0).min_size(egui::vec2(220.0, 24.0)));
+                
+                // Store button rect for popup positioning
+                self.model_picker_btn_rect = Some(btn_resp.rect);
                 
                 if btn_resp.clicked() {
                     self.show_model_picker = !self.show_model_picker;
@@ -1099,7 +1122,8 @@ impl ChatApp {
                     
                     let can = !self.is_streaming && !self.is_compacting && !self.input.trim().is_empty();
                     let bc = if can { pal.accent } else { pal.accent_dim };
-                    let clicked = ui.add(egui::Button::new(egui::RichText::new("Send").color(if can { pal.bg_base } else { pal.text_muted }).size(13.0)).fill(bc).corner_radius(8.0).min_size(egui::vec2(52.0, 30.0))).clicked();
+                    let text_color = if can { egui::Color32::WHITE } else { pal.text_muted };
+                    let clicked = ui.add(egui::Button::new(egui::RichText::new("Send").color(text_color).size(13.0)).fill(bc).corner_radius(8.0).min_size(egui::vec2(52.0, 30.0))).clicked();
                     if (should_send || clicked) && can { let ctx = ui.ctx().clone(); self.send_message(&ctx); }
                 });
             });
