@@ -21,11 +21,10 @@ pub enum StreamToken {
 pub enum AwsCreds {
     /// Use the standard credential chain (~/.aws/credentials, env vars, SSO, IMDS)
     DefaultChain,
-    /// Explicit access key / secret key (+ optional session token)
+    /// Explicit access key + secret key
     Explicit {
         access_key: String,
         secret_key: String,
-        session_token: Option<String>,
     },
 }
 
@@ -43,12 +42,11 @@ async fn make_client(region: &str, creds: &AwsCreds) -> Result<aws_sdk_bedrockru
         AwsCreds::Explicit {
             access_key,
             secret_key,
-            session_token,
         } => {
             let cred_provider = aws_credential_types::Credentials::new(
                 access_key,
                 secret_key,
-                session_token.clone(),
+                None::<String>,
                 None,
                 "bedrock-chat",
             );

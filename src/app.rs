@@ -15,7 +15,6 @@ use crate::message::{ChatMessage, Conversation, Role, MODELS, REGIONS};
 struct CredentialForm {
     access_key: String,
     secret_key: String,
-    session_token: String,
     region_idx: usize,
 }
 
@@ -310,71 +309,46 @@ impl ChatApp {
                 .fill(ui.visuals().window_fill)
                 .stroke(ui.visuals().window_stroke)
                 .show(ui, |ui| {
-                    ui.set_width(400.0);
-                    ui.heading("AWS Credentials");
-                    ui.add_space(8.0);
-                    ui.label("Enter credentials or leave blank to use the default chain\n(~/.aws/credentials, env vars, SSO).");
+                    ui.set_width(380.0);
+                    ui.heading("Bedrock Chat");
+                    ui.add_space(4.0);
+                    ui.label("Paste your AWS keys, or skip to use your existing config.");
                     ui.add_space(12.0);
 
-                    // We need to pull the form out of self.screen to avoid borrow issues
                     let Screen::Credentials(form) = &mut self.screen else {
                         return;
                     };
 
-                    egui::Grid::new("cred_grid")
-                        .num_columns(2)
-                        .spacing([8.0, 8.0])
-                        .show(ui, |ui| {
-                            ui.label("Access Key ID:");
-                            ui.add(
-                                egui::TextEdit::singleline(&mut form.access_key)
-                                    .desired_width(280.0)
-                                    .hint_text("AKIA..."),
-                            );
-                            ui.end_row();
+                    ui.label("Access Key ID");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut form.access_key)
+                            .desired_width(f32::INFINITY)
+                            .hint_text("AKIA..."),
+                    );
+                    ui.add_space(4.0);
 
-                            ui.label("Secret Access Key:");
-                            ui.add(
-                                egui::TextEdit::singleline(&mut form.secret_key)
-                                    .desired_width(280.0)
-                                    .password(true)
-                                    .hint_text("wJalr..."),
-                            );
-                            ui.end_row();
+                    ui.label("Secret Access Key");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut form.secret_key)
+                            .desired_width(f32::INFINITY)
+                            .password(true),
+                    );
+                    ui.add_space(4.0);
 
-                            ui.label("Session Token:");
-                            ui.add(
-                                egui::TextEdit::singleline(&mut form.session_token)
-                                    .desired_width(280.0)
-                                    .password(true)
-                                    .hint_text("(optional)"),
-                            );
-                            ui.end_row();
-
-                            ui.label("Region:");
-                            egui::ComboBox::from_id_salt("cred_region")
-                                .selected_text(REGIONS[form.region_idx])
-                                .show_ui(ui, |ui| {
-                                    for (i, region) in REGIONS.iter().enumerate() {
-                                        ui.selectable_value(&mut form.region_idx, i, *region);
-                                    }
-                                });
-                            ui.end_row();
-                        });
+                    ui.horizontal(|ui| {
+                        ui.label("Region");
+                        egui::ComboBox::from_id_salt("cred_region")
+                            .selected_text(REGIONS[form.region_idx])
+                            .show_ui(ui, |ui| {
+                                for (i, region) in REGIONS.iter().enumerate() {
+                                    ui.selectable_value(&mut form.region_idx, i, *region);
+                                }
+                            });
+                    });
 
                     ui.add_space(16.0);
 
                     ui.horizontal(|ui| {
-                        if ui.button("Use Default Chain").clicked() {
-                            // Grab region before we replace screen
-                            let Screen::Credentials(form) = &self.screen else {
-                                return;
-                            };
-                            self.region_idx = form.region_idx;
-                            self.aws_creds = AwsCreds::DefaultChain;
-                            self.screen = Screen::Chat;
-                        }
-
                         let Screen::Credentials(form) = &self.screen else {
                             return;
                         };
@@ -388,17 +362,20 @@ impl ChatApp {
                             let Screen::Credentials(form) = &self.screen else {
                                 return;
                             };
-                            let token = if form.session_token.trim().is_empty() {
-                                None
-                            } else {
-                                Some(form.session_token.trim().to_string())
-                            };
                             self.region_idx = form.region_idx;
                             self.aws_creds = AwsCreds::Explicit {
                                 access_key: form.access_key.trim().to_string(),
                                 secret_key: form.secret_key.trim().to_string(),
-                                session_token: token,
                             };
+                            self.screen = Screen::Chat;
+                        }
+
+                        if ui.button("Skip (use ~/.aws)").clicked() {
+                            let Screen::Credentials(form) = &self.screen else {
+                                return;
+                            };
+                            self.region_idx = form.region_idx;
+                            self.aws_creds = AwsCreds::DefaultChain;
                             self.screen = Screen::Chat;
                         }
                     });
