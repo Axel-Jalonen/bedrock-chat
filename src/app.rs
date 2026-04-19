@@ -23,13 +23,14 @@ struct Palette {
     bg_modal: egui::Color32,
     accent: egui::Color32,
     accent_dim: egui::Color32,
-    accent2: egui::Color32,  // secondary accent for particles
-    accent3: egui::Color32,  // tertiary accent for particles
+    accent2: egui::Color32, // secondary accent for particles
+    accent3: egui::Color32, // tertiary accent for particles
     text_primary: egui::Color32,
     text_secondary: egui::Color32,
     text_muted: egui::Color32,
     error: egui::Color32,
     border: egui::Color32,
+    border_strong: egui::Color32,
     hover: egui::Color32,
     selected: egui::Color32,
     role_user: egui::Color32,
@@ -39,45 +40,76 @@ struct Palette {
 impl Palette {
     fn dark() -> Self {
         Self {
-            bg_base: c(22, 22, 26), bg_sidebar: c(28, 28, 33), bg_user_msg: c(32, 33, 42),
-            bg_assist_msg: c(26, 26, 30), bg_input: c(34, 35, 40), bg_topbar: c(28, 28, 33),
+            bg_base: c(22, 22, 26),
+            bg_sidebar: c(28, 28, 33),
+            bg_user_msg: c(32, 33, 42),
+            bg_assist_msg: c(26, 26, 30),
+            bg_input: c(34, 35, 40),
+            bg_topbar: c(28, 28, 33),
             bg_modal: c(32, 33, 38),
-            accent: c(100, 140, 255), accent_dim: c(70, 100, 190),
-            accent2: c(160, 100, 255), accent3: c(80, 200, 200),
-            text_primary: c(220, 222, 228), text_secondary: c(140, 144, 158),
-            text_muted: c(90, 94, 108), error: c(255, 110, 110), border: c(50, 52, 60),
-            hover: c(42, 44, 54), selected: c(40, 50, 75),
-            role_user: c(130, 170, 255), role_assistant: c(160, 220, 160),
+            accent: c(100, 140, 255),
+            accent_dim: c(70, 100, 190),
+            accent2: c(160, 100, 255),
+            accent3: c(80, 200, 200),
+            text_primary: c(220, 222, 228),
+            text_secondary: c(140, 144, 158),
+            text_muted: c(90, 94, 108),
+            error: c(255, 110, 110),
+            border: c(50, 52, 60),
+            border_strong: c(60, 62, 70),
+            hover: c(42, 44, 54),
+            selected: c(40, 50, 75),
+            role_user: c(130, 170, 255),
+            role_assistant: c(160, 220, 160),
         }
     }
     fn light() -> Self {
         Self {
-            bg_base: c(245, 245, 248), bg_sidebar: c(235, 236, 240), bg_user_msg: c(225, 230, 245),
-            bg_assist_msg: c(240, 240, 244), bg_input: c(255, 255, 255), bg_topbar: c(235, 236, 240),
+            bg_base: c(245, 245, 248),
+            bg_sidebar: c(235, 236, 240),
+            bg_user_msg: c(225, 230, 245),
+            bg_assist_msg: c(240, 240, 244),
+            bg_input: c(255, 255, 255),
+            bg_topbar: c(235, 236, 240),
             bg_modal: c(255, 255, 255),
-            accent: c(50, 100, 220), accent_dim: c(130, 160, 220),
-            accent2: c(120, 60, 200), accent3: c(40, 160, 160),
-            text_primary: c(30, 30, 36), text_secondary: c(90, 94, 108),
-            text_muted: c(150, 154, 168), error: c(200, 50, 50), border: c(210, 212, 220),
-            hover: c(220, 222, 230), selected: c(210, 220, 245),
-            role_user: c(40, 80, 180), role_assistant: c(30, 130, 50),
+            accent: c(50, 100, 220),
+            accent_dim: c(130, 160, 220),
+            accent2: c(120, 60, 200),
+            accent3: c(40, 160, 160),
+            text_primary: c(30, 30, 36),
+            text_secondary: c(90, 94, 108),
+            text_muted: c(150, 154, 168),
+            error: c(200, 50, 50),
+            border: c(210, 212, 220),
+            border_strong: c(200, 202, 210),
+            hover: c(220, 222, 230),
+            selected: c(210, 220, 245),
+            role_user: c(40, 80, 180),
+            role_assistant: c(30, 130, 50),
         }
     }
     fn for_theme(theme: egui::Theme) -> Self {
-        match theme { egui::Theme::Dark => Self::dark(), egui::Theme::Light => Self::light() }
+        match theme {
+            egui::Theme::Dark => Self::dark(),
+            egui::Theme::Light => Self::light(),
+        }
     }
 }
-fn c(r: u8, g: u8, b: u8) -> egui::Color32 { egui::Color32::from_rgb(r, g, b) }
+fn c(r: u8, g: u8, b: u8) -> egui::Color32 {
+    egui::Color32::from_rgb(r, g, b)
+}
 
 // ── Burst particle effect ───────────────────────────────────────────────
 // Short-lived particle burst spawned from a point (e.g. the + button on new chat).
 
 struct BurstParticle {
-    x: f32, y: f32,
-    vx: f32, vy: f32,
+    x: f32,
+    y: f32,
+    vx: f32,
+    vy: f32,
     radius: f32,
     color_idx: u8,
-    life: f32,     // 0..1, counts down
+    life: f32, // 0..1, counts down
 }
 
 struct BurstFx {
@@ -85,7 +117,11 @@ struct BurstFx {
 }
 
 impl BurstFx {
-    fn new() -> Self { Self { particles: Vec::new() } }
+    fn new() -> Self {
+        Self {
+            particles: Vec::new(),
+        }
+    }
 
     /// Spawn a burst of particles from a screen position.
     fn spawn(&mut self, pos: egui::Pos2, count: usize) {
@@ -94,7 +130,8 @@ impl BurstFx {
             let angle = rng.gen_range(0.0..std::f32::consts::TAU);
             let speed = rng.gen_range(80.0..250.0);
             self.particles.push(BurstParticle {
-                x: pos.x, y: pos.y,
+                x: pos.x,
+                y: pos.y,
                 vx: angle.cos() * speed,
                 vy: angle.sin() * speed,
                 radius: rng.gen_range(1.5..4.0),
@@ -109,7 +146,9 @@ impl BurstFx {
         let decay = 2.5; // life units per second
         self.particles.retain_mut(|p| {
             p.life -= decay * dt;
-            if p.life <= 0.0 { return false; }
+            if p.life <= 0.0 {
+                return false;
+            }
 
             // Decelerate
             p.vx *= 1.0 - 3.0 * dt;
@@ -122,7 +161,9 @@ impl BurstFx {
 
             let a = (p.life * 200.0) as u8;
             let base = match p.color_idx {
-                0 => pal.accent, 1 => pal.accent2, _ => pal.accent3,
+                0 => pal.accent,
+                1 => pal.accent2,
+                _ => pal.accent3,
             };
             let color = egui::Color32::from_rgba_premultiplied(base.r(), base.g(), base.b(), a);
             let r = p.radius * (0.5 + p.life * 0.5);
@@ -136,9 +177,16 @@ impl BurstFx {
 // ── App state ──────────────────────────────────────────────────────────
 
 #[derive(Default)]
-struct CredentialForm { api_key: String, region_idx: usize, is_settings: bool }
+struct CredentialForm {
+    api_key: String,
+    region_idx: usize,
+    is_settings: bool,
+}
 
-enum Screen { Credentials(CredentialForm), Chat }
+enum Screen {
+    Credentials(CredentialForm),
+    Chat,
+}
 
 pub struct ChatApp {
     rt: tokio::runtime::Handle,
@@ -189,6 +237,29 @@ pub struct ChatApp {
 
     /// Timestamp of last Escape press for double-tap detection
     last_escape_time: f64,
+
+    /// ID of the current ephemeral conversation, if any
+    ephemeral_id: Option<String>,
+    /// Timestamp when the ephemeral conversation auto-expires (set while not active)
+    ephemeral_expiry: Option<f64>,
+
+    /// Timestamp until which the active chat row pulses (visual "already empty" cue)
+    pulse_active_until: Option<f64>,
+
+    /// Index currently locked out of hover-selection in the search modal
+    /// (set on arrow-key press; cleared when the pointer leaves that item)
+    search_hover_lock: Option<usize>,
+
+    /// Delete-all confirmation flow state
+    delete_all_confirming: bool,
+    delete_all_feedback_until: Option<f64>,
+
+    /// ID of chat currently being renamed (if any)
+    renaming_id: Option<String>,
+    /// In-flight draft for the rename TextEdit
+    rename_draft: String,
+    /// Set once when a rename starts, so we can request_focus() on the TextEdit
+    rename_just_started: bool,
 }
 
 impl ChatApp {
@@ -196,37 +267,88 @@ impl ChatApp {
         let theme = cc.egui_ctx.system_theme().unwrap_or(egui::Theme::Dark);
         let pal = Palette::for_theme(theme);
         apply_visuals(&cc.egui_ctx, theme, &pal);
+        load_system_font(&cc.egui_ctx);
 
         let db = match Database::open() {
             Ok(db) => db,
-            Err(e) => { error!("Failed to open database: {e:#}"); panic!("Cannot open database: {e:#}"); }
+            Err(e) => {
+                error!("Failed to open database: {e:#}");
+                panic!("Cannot open database: {e:#}");
+            }
         };
 
         let conversations = db.list_conversations().unwrap_or_default();
         let saved_key = db.get_config("api_key").ok().flatten();
-        let saved_region = db.get_config("region").ok().flatten()
-            .and_then(|r| REGIONS.iter().position(|&x| x == r)).unwrap_or(0);
+        let saved_region = db
+            .get_config("region")
+            .ok()
+            .flatten()
+            .and_then(|r| REGIONS.iter().position(|&x| x == r))
+            .unwrap_or(0);
 
         let screen = if let Some(ref key) = saved_key {
-            if !key.is_empty() { std::env::set_var("AWS_BEARER_TOKEN_BEDROCK", key); Screen::Chat }
-            else { Screen::Credentials(CredentialForm::default()) }
-        } else { Screen::Credentials(CredentialForm::default()) };
+            if !key.is_empty() {
+                std::env::set_var("AWS_BEARER_TOKEN_BEDROCK", key);
+                Screen::Chat
+            } else {
+                Screen::Credentials(CredentialForm::default())
+            }
+        } else {
+            Screen::Credentials(CredentialForm::default())
+        };
 
-        let clipboard = arboard::Clipboard::new().map_err(|e| warn!("clipboard unavailable: {e}")).ok();
+        let clipboard = arboard::Clipboard::new()
+            .map_err(|e| warn!("clipboard unavailable: {e}"))
+            .ok();
 
         Self {
-            rt, db, screen, conversations, active_id: None, messages: Vec::new(),
-            md_caches: HashMap::new(), streaming_md_cache: CommonMarkCache::default(),
-            input: String::new(), stream_rx: None, is_streaming: false, last_error: None,
-            scroll_to_bottom: false, user_scrolled_up: false, model_idx: 0, region_idx: saved_region,
-            show_system_prompt: false, system_prompt_draft: String::new(), clipboard, conv_usage: TokenUsage::default(),
-            last_usage: None, current_theme: theme, pal, burst: BurstFx::new(),
-            last_frame_time: None, model_filter: String::new(), show_model_picker: false,
-            model_picker_hover_idx: None, model_picker_btn_rect: None, ephemeral: false,
-            show_search: false, search_query: String::new(), search_results: Vec::new(),
-            search_just_opened: false, search_selected_idx: 0,
-            is_compacting: false, compact_rx: None,
+            rt,
+            db,
+            screen,
+            conversations,
+            active_id: None,
+            messages: Vec::new(),
+            md_caches: HashMap::new(),
+            streaming_md_cache: CommonMarkCache::default(),
+            input: String::new(),
+            stream_rx: None,
+            is_streaming: false,
+            last_error: None,
+            scroll_to_bottom: false,
+            user_scrolled_up: false,
+            model_idx: 0,
+            region_idx: saved_region,
+            show_system_prompt: false,
+            system_prompt_draft: String::new(),
+            clipboard,
+            conv_usage: TokenUsage::default(),
+            last_usage: None,
+            current_theme: theme,
+            pal,
+            burst: BurstFx::new(),
+            last_frame_time: None,
+            model_filter: String::new(),
+            show_model_picker: false,
+            model_picker_hover_idx: None,
+            model_picker_btn_rect: None,
+            ephemeral: false,
+            show_search: false,
+            search_query: String::new(),
+            search_results: Vec::new(),
+            search_just_opened: false,
+            search_selected_idx: 0,
+            is_compacting: false,
+            compact_rx: None,
             last_escape_time: 0.0,
+            ephemeral_id: None,
+            ephemeral_expiry: None,
+            pulse_active_until: None,
+            search_hover_lock: None,
+            delete_all_confirming: false,
+            delete_all_feedback_until: None,
+            renaming_id: None,
+            rename_draft: String::new(),
+            rename_just_started: false,
         }
     }
 
@@ -241,7 +363,10 @@ impl ChatApp {
 
     fn get_dt(&mut self, ui: &egui::Ui) -> f32 {
         let now = ui.input(|i| i.time);
-        let dt = self.last_frame_time.map_or(0.016, |t| (now - t) as f32).min(0.1);
+        let dt = self
+            .last_frame_time
+            .map_or(0.016, |t| (now - t) as f32)
+            .min(0.1);
         self.last_frame_time = Some(now);
         dt
     }
@@ -249,45 +374,83 @@ impl ChatApp {
     // ── Helpers ────────────────────────────────────────────────────────
 
     fn active_conversation(&self) -> Option<&Conversation> {
-        self.active_id.as_ref().and_then(|id| self.conversations.iter().find(|c| c.id == *id))
+        self.active_id
+            .as_ref()
+            .and_then(|id| self.conversations.iter().find(|c| c.id == *id))
     }
     fn active_conversation_mut(&mut self) -> Option<&mut Conversation> {
         let id = self.active_id.clone()?;
         self.conversations.iter_mut().find(|c| c.id == id)
     }
-    fn conv_has_messages(&self) -> bool { !self.messages.is_empty() }
+    fn conv_has_messages(&self) -> bool {
+        !self.messages.is_empty()
+    }
 
     fn select_conversation(&mut self, id: &str) {
-        // Clean up empty ephemeral chat when leaving
-        if self.ephemeral {
-            if let Some(old_id) = &self.active_id {
-                if self.messages.is_empty() && old_id != id {
-                    // Remove the empty ephemeral chat from the list
-                    let old_id_clone = old_id.clone();
-                    self.conversations.retain(|c| c.id != old_id_clone);
-                }
+        // Are we switching INTO the ephemeral chat, or AWAY from it?
+        if let Some(eph_id) = &self.ephemeral_id {
+            if eph_id == id {
+                // Re-entering ephemeral: clear any pending expiry
+                self.ephemeral_expiry = None;
+                self.ephemeral = true;
+            } else {
+                // Leaving ephemeral: not the active chat anymore
+                self.ephemeral = false;
+                // Expiry timer gets started in the per-frame lifecycle tick.
             }
+        } else {
+            self.ephemeral = false;
         }
-        
+
         self.active_id = Some(id.to_string());
         self.conv_usage = TokenUsage::default();
         self.last_usage = None;
         match self.db.list_messages(id) {
-            Ok(msgs) => { self.messages = msgs; self.md_caches.clear(); self.scroll_to_bottom = true; }
-            Err(e) => { error!("failed to load messages: {e:#}"); self.last_error = Some(format!("Failed to load: {e:#}")); }
+            Ok(msgs) => {
+                self.messages = msgs;
+                self.md_caches.clear();
+                self.scroll_to_bottom = true;
+            }
+            Err(e) => {
+                error!("failed to load messages: {e:#}");
+                self.last_error = Some(format!("Failed to load: {e:#}"));
+            }
         }
-        let conv_data = self.active_conversation().map(|c| (c.model_id.clone(), c.region.clone(), c.system_prompt.clone()));
+        let conv_data = self.active_conversation().map(|c| {
+            (
+                c.model_id.clone(),
+                c.region.clone(),
+                c.system_prompt.clone(),
+            )
+        });
         if let Some((model_id, region, sys_prompt)) = conv_data {
-            if let Some(idx) = MODELS.iter().position(|m| m.id == model_id) { self.model_idx = idx; }
-            if let Some(idx) = REGIONS.iter().position(|r| *r == region) { self.region_idx = idx; }
+            if let Some(idx) = MODELS.iter().position(|m| m.id == model_id) {
+                self.model_idx = idx;
+            }
+            if let Some(idx) = REGIONS.iter().position(|r| *r == region) {
+                self.region_idx = idx;
+            }
             self.system_prompt_draft = sys_prompt;
         }
     }
 
     fn new_conversation(&mut self) {
+        // If we're creating a new ephemeral chat, the old one is replaced immediately.
+        // Otherwise (regular new chat), leave the old ephemeral alone so it can expire.
+        if self.ephemeral {
+            if let Some(eph_id) = self.ephemeral_id.take() {
+                self.conversations.retain(|c| c.id != eph_id);
+            }
+        }
+
         let model_id = MODELS[self.model_idx].id;
         let region = REGIONS[self.region_idx];
-        let conv = Conversation::new("New Chat", model_id, region);
+        let title = if self.ephemeral {
+            "new ephemeral chat"
+        } else {
+            "New Chat"
+        };
+        let conv = Conversation::new(title, model_id, region);
         if !self.ephemeral {
             if let Err(e) = self.db.upsert_conversation(&conv) {
                 error!("failed to create conversation: {e:#}");
@@ -296,6 +459,9 @@ impl ChatApp {
             }
         }
         let id = conv.id.clone();
+        if self.ephemeral {
+            self.ephemeral_id = Some(id.clone());
+        }
         self.conversations.insert(0, conv);
         self.select_conversation(&id);
         self.system_prompt_draft.clear();
@@ -305,45 +471,128 @@ impl ChatApp {
         let _ = self.db.delete_conversation(id);
         self.conversations.retain(|c| c.id != id);
         if self.active_id.as_deref() == Some(id) {
-            self.active_id = None; self.messages.clear(); self.md_caches.clear();
-            self.conv_usage = TokenUsage::default(); self.last_usage = None;
+            self.active_id = None;
+            self.messages.clear();
+            self.md_caches.clear();
+            self.conv_usage = TokenUsage::default();
+            self.last_usage = None;
+        }
+        if self.ephemeral_id.as_deref() == Some(id) {
+            self.ephemeral_id = None;
+            self.ephemeral_expiry = None;
+            self.ephemeral = false;
+        }
+    }
+
+    /// Manage ephemeral lifecycle: start a 30s expiry timer when the ephemeral
+    /// chat isn't the active chat, and auto-delete when it fires.
+    fn tick_ephemeral_lifecycle(&mut self, ctx: &egui::Context) {
+        let eph_id = match &self.ephemeral_id {
+            Some(id) => id.clone(),
+            None => return,
+        };
+        let now = ctx.input(|i| i.time);
+        let is_active = self.active_id.as_deref() == Some(eph_id.as_str());
+
+        if is_active {
+            if self.ephemeral_expiry.is_some() {
+                self.ephemeral_expiry = None;
+            }
+            return;
+        }
+
+        match self.ephemeral_expiry {
+            None => {
+                self.ephemeral_expiry = Some(now + 30.0);
+                ctx.request_repaint();
+            }
+            Some(exp) => {
+                if now >= exp {
+                    let eid = eph_id.clone();
+                    self.conversations.retain(|c| c.id != eid);
+                    self.ephemeral_id = None;
+                    self.ephemeral_expiry = None;
+                    self.ephemeral = false;
+                } else {
+                    // Re-render at least once per second so the countdown updates
+                    ctx.request_repaint_after(std::time::Duration::from_millis(500));
+                }
+            }
         }
     }
 
     fn send_message(&mut self, ctx: &egui::Context) {
         let text = self.input.trim().to_string();
-        if text.is_empty() { return; }
+        if text.is_empty() {
+            return;
+        }
         self.last_error = None;
 
         let conv_id = match &self.active_id {
             Some(id) => id.clone(),
-            None => { self.new_conversation(); match &self.active_id { Some(id) => id.clone(), None => return } }
+            None => {
+                self.new_conversation();
+                match &self.active_id {
+                    Some(id) => id.clone(),
+                    None => return,
+                }
+            }
         };
 
         let user_msg = ChatMessage::new(&conv_id, Role::User, &text);
-        if !self.ephemeral { let _ = self.db.insert_message(&user_msg); }
+        if !self.ephemeral {
+            let _ = self.db.insert_message(&user_msg);
+        }
         self.messages.push(user_msg);
         self.input.clear();
 
         if self.messages.len() == 1 {
             let title: String = text.chars().take(50).collect();
-            if let Some(conv) = self.active_conversation_mut() { conv.title = title; conv.updated_at = chrono::Utc::now(); }
-            if !self.ephemeral { if let Some(conv) = self.active_conversation() { let _ = self.db.upsert_conversation(conv); } }
+            if let Some(conv) = self.active_conversation_mut() {
+                conv.title = title;
+                conv.updated_at = chrono::Utc::now();
+            }
+            if !self.ephemeral {
+                if let Some(conv) = self.active_conversation() {
+                    let _ = self.db.upsert_conversation(conv);
+                }
+            }
         }
 
         let assistant_msg = ChatMessage::new(&conv_id, Role::Assistant, "");
-        if !self.ephemeral { let _ = self.db.insert_message(&assistant_msg); }
+        if !self.ephemeral {
+            let _ = self.db.insert_message(&assistant_msg);
+        }
         self.messages.push(assistant_msg);
 
-        let history: Vec<(String, String)> = self.messages.iter()
+        let history: Vec<(String, String)> = self
+            .messages
+            .iter()
             .filter(|m| !m.content.is_empty())
-            .map(|m| (m.role.as_str().to_string(), m.content.clone())).collect();
+            .map(|m| (m.role.as_str().to_string(), m.content.clone()))
+            .collect();
 
-        let conv_info = self.active_conversation().map(|c| (c.model_id.clone(), c.region.clone(), c.system_prompt.clone()));
-        let (model_id, region, system_prompt) = match conv_info { Some(t) => t, None => return };
+        let conv_info = self.active_conversation().map(|c| {
+            (
+                c.model_id.clone(),
+                c.region.clone(),
+                c.system_prompt.clone(),
+            )
+        });
+        let (model_id, region, system_prompt) = match conv_info {
+            Some(t) => t,
+            None => return,
+        };
 
         self.streaming_md_cache = CommonMarkCache::default();
-        let rx = bedrock::spawn_stream(&self.rt, ctx.clone(), model_id, region, system_prompt, history);
+        let rx = bedrock::spawn_stream(
+            &self.rt,
+            ctx.clone(),
+            model_id,
+            region,
+            system_prompt,
+            history,
+        );
         self.stream_rx = Some(rx);
         self.is_streaming = true;
         self.user_scrolled_up = false;
@@ -351,13 +600,18 @@ impl ChatApp {
     }
 
     fn poll_stream(&mut self) {
-        let rx = match &mut self.stream_rx { Some(rx) => rx, None => return };
+        let rx = match &mut self.stream_rx {
+            Some(rx) => rx,
+            None => return,
+        };
         loop {
             match rx.try_recv() {
                 Ok(StreamToken::Delta(text)) => {
                     if let Some(msg) = self.messages.last_mut() {
                         msg.append_token(&text);
-                        if !self.user_scrolled_up { self.scroll_to_bottom = true; }
+                        if !self.user_scrolled_up {
+                            self.scroll_to_bottom = true;
+                        }
                     }
                 }
                 Ok(StreamToken::Done(usage)) => {
@@ -368,11 +622,19 @@ impl ChatApp {
                         self.conv_usage.total_tokens += u.total_tokens;
                         self.last_usage = Some(u);
                     }
-                    self.finish_stream(); break;
+                    self.finish_stream();
+                    break;
                 }
-                Ok(StreamToken::Error(e)) => { self.last_error = Some(e); self.finish_stream(); break; }
+                Ok(StreamToken::Error(e)) => {
+                    self.last_error = Some(e);
+                    self.finish_stream();
+                    break;
+                }
                 Err(mpsc::error::TryRecvError::Empty) => break,
-                Err(mpsc::error::TryRecvError::Disconnected) => { self.finish_stream(); break; }
+                Err(mpsc::error::TryRecvError::Disconnected) => {
+                    self.finish_stream();
+                    break;
+                }
             }
         }
     }
@@ -383,57 +645,104 @@ impl ChatApp {
         self.user_scrolled_up = false;
         if !self.ephemeral {
             if let Some(msg) = self.messages.last() {
-                if msg.role == Role::Assistant { let _ = self.db.update_message_content(&msg.id, &msg.content); }
+                if msg.role == Role::Assistant {
+                    let _ = self.db.update_message_content(&msg.id, &msg.content);
+                }
             }
-            if let Some(conv) = self.active_conversation_mut() { conv.updated_at = chrono::Utc::now(); }
-            if let Some(conv) = self.active_conversation() { let _ = self.db.upsert_conversation(conv); }
+            if let Some(conv) = self.active_conversation_mut() {
+                conv.updated_at = chrono::Utc::now();
+            }
+            if let Some(conv) = self.active_conversation() {
+                let _ = self.db.upsert_conversation(conv);
+            }
         }
     }
 
     fn copy_to_clipboard(&mut self, text: &str) {
-        if let Some(ref mut cb) = self.clipboard { let _ = cb.set_text(text); }
+        if let Some(ref mut cb) = self.clipboard {
+            let _ = cb.set_text(text);
+        }
     }
 
     // ── Compact context ────────────────────────────────────────────────
 
     fn compact_context(&mut self, ctx: &egui::Context) {
-        if self.messages.is_empty() || self.is_streaming || self.is_compacting { return; }
-        let conv_info = self.active_conversation().map(|c| (c.model_id.clone(), c.region.clone()));
-        let (model_id, region) = match conv_info { Some(t) => t, None => return };
+        if self.messages.is_empty() || self.is_streaming || self.is_compacting {
+            return;
+        }
+        let conv_info = self
+            .active_conversation()
+            .map(|c| (c.model_id.clone(), c.region.clone()));
+        let (model_id, region) = match conv_info {
+            Some(t) => t,
+            None => return,
+        };
 
         let mut prompt = String::from("Summarize the following conversation concisely, preserving all key facts, decisions, and context so it can be used as the starting context for a continuation. Output ONLY the summary, no preamble.\n\n");
         for m in &self.messages {
-            if m.content.is_empty() { continue; }
-            let role = match m.role { Role::User => "User", Role::Assistant => "Assistant" };
+            if m.content.is_empty() {
+                continue;
+            }
+            let role = match m.role {
+                Role::User => "User",
+                Role::Assistant => "Assistant",
+            };
             prompt.push_str(&format!("{role}: {}\n\n", m.content));
         }
 
-        let rx = bedrock::spawn_stream(&self.rt, ctx.clone(), model_id, region, String::new(), vec![("user".into(), prompt)]);
+        let rx = bedrock::spawn_stream(
+            &self.rt,
+            ctx.clone(),
+            model_id,
+            region,
+            String::new(),
+            vec![("user".into(), prompt)],
+        );
         self.compact_rx = Some(rx);
         self.is_compacting = true;
     }
 
     fn poll_compact(&mut self) {
-        let rx = match &mut self.compact_rx { Some(rx) => rx, None => return };
+        let rx = match &mut self.compact_rx {
+            Some(rx) => rx,
+            None => return,
+        };
         let mut summary = String::new();
         let mut done = false;
         loop {
             match rx.try_recv() {
                 Ok(StreamToken::Delta(text)) => summary.push_str(&text),
-                Ok(StreamToken::Done(_)) => { done = true; break; }
-                Ok(StreamToken::Error(e)) => { self.last_error = Some(format!("Compact error: {e}")); done = true; break; }
+                Ok(StreamToken::Done(_)) => {
+                    done = true;
+                    break;
+                }
+                Ok(StreamToken::Error(e)) => {
+                    self.last_error = Some(format!("Compact error: {e}"));
+                    done = true;
+                    break;
+                }
                 Err(mpsc::error::TryRecvError::Empty) => break,
-                Err(mpsc::error::TryRecvError::Disconnected) => { done = true; break; }
+                Err(mpsc::error::TryRecvError::Disconnected) => {
+                    done = true;
+                    break;
+                }
             }
         }
         if done {
             self.is_compacting = false;
             self.compact_rx = None;
             if !summary.is_empty() {
-                let conv_id = match &self.active_id { Some(id) => id.clone(), None => return };
+                let conv_id = match &self.active_id {
+                    Some(id) => id.clone(),
+                    None => return,
+                };
                 self.messages.clear();
                 self.md_caches.clear();
-                let compacted = ChatMessage::new(&conv_id, Role::Assistant, &format!("[Compacted context]\n\n{summary}"));
+                let compacted = ChatMessage::new(
+                    &conv_id,
+                    Role::Assistant,
+                    &format!("[Compacted context]\n\n{summary}"),
+                );
                 if !self.ephemeral {
                     if let Some(conv) = self.active_conversation() {
                         let _ = self.db.delete_conversation(&conv.id);
@@ -454,100 +763,188 @@ impl ChatApp {
 
     fn render_search_modal(&mut self, ui: &mut egui::Ui) {
         let pal = self.pal.clone();
-        
+
         // If no search query, show all conversations for browsing
         let items: Vec<(String, String, String)> = if self.search_query.len() >= 2 {
             self.search_results.clone()
         } else if self.search_query.is_empty() {
             // Show recent conversations when no search
-            self.conversations.iter().take(20)
+            self.conversations
+                .iter()
+                .take(20)
                 .map(|c| (c.id.clone(), c.title.clone(), String::new()))
                 .collect()
         } else {
             Vec::new()
         };
-        
-        // Arrow key navigation (works even before searching)
+
+        // Arrow-key navigation. consume_key so the TextEdit (which has focus) can't
+        // swallow the key before we see it. On arrow press, lock out hover-selection
+        // for whichever item the mouse is currently hovering — otherwise a stationary
+        // hover would immediately pull selection back. The lock clears once the mouse
+        // leaves that item.
         let item_count = items.len();
-        if item_count > 0 {
-            if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
-                self.search_selected_idx = (self.search_selected_idx + 1).min(item_count - 1);
-            }
-            if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-                self.search_selected_idx = self.search_selected_idx.saturating_sub(1);
-            }
-        }
-        
+        let arrow_down = item_count > 0
+            && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown));
+        let arrow_up = item_count > 0
+            && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp));
+
         egui::Area::new(egui::Id::new("search_overlay"))
             .fixed_pos(egui::pos2(0.0, 0.0))
             .show(ui.ctx(), |ui| {
                 let screen = ui.ctx().content_rect();
-                ui.painter().rect_filled(screen, 0.0, egui::Color32::from_black_alpha(120));
+                ui.painter()
+                    .rect_filled(screen, 0.0, egui::Color32::from_black_alpha(120));
                 egui::Area::new(egui::Id::new("search_modal"))
                     .fixed_pos(egui::pos2(screen.center().x - 250.0, screen.top() + 80.0))
                     .show(ui.ctx(), |ui| {
-                        egui::Frame::new().fill(pal.bg_modal).corner_radius(12.0)
+                        egui::Frame::new()
+                            .fill(pal.bg_modal)
+                            .corner_radius(12.0)
                             .stroke(egui::Stroke::new(1.0, pal.border))
-                            .inner_margin(egui::Margin::same(20)).show(ui, |ui| {
-                            ui.set_width(500.0);
-                            ui.colored_label(pal.text_primary, egui::RichText::new("Search Chats").size(16.0).strong());
-                            ui.add_space(8.0);
-                            let resp = ui.add(egui::TextEdit::singleline(&mut self.search_query)
-                                .desired_width(f32::INFINITY).hint_text("Type to search..."));
-                            if resp.changed() {
-                                self.search_results = if self.search_query.len() >= 2 {
-                                    self.db.search(&self.search_query).unwrap_or_default()
-                                } else { Vec::new() };
-                                self.search_selected_idx = 0;
-                            }
-                            // Only grab focus once when the modal first opens
-                            if self.search_just_opened {
-                                resp.request_focus();
-                                self.search_just_opened = false;
-                            }
-                            
-                            ui.add_space(8.0);
-                            let mut to_open: Option<String> = None;
-                            
-                            // Enter to select
-                            if ui.input(|i| i.key_pressed(egui::Key::Enter)) && item_count > 0 && self.search_selected_idx < items.len() {
-                                to_open = Some(items[self.search_selected_idx].0.clone());
-                            }
-                            
-                            egui::ScrollArea::vertical().max_height(400.0).auto_shrink([false, false]).show(ui, |ui| {
-                                ui.set_width(ui.available_width());
-                                
-                                if items.is_empty() && self.search_query.len() >= 2 {
-                                    ui.colored_label(pal.text_muted, "No results");
-                                } else if items.is_empty() && self.search_query.len() == 1 {
-                                    ui.colored_label(pal.text_muted, "Type more to search...");
+                            .inner_margin(egui::Margin::same(20))
+                            .show(ui, |ui| {
+                                ui.set_width(500.0);
+                                ui.colored_label(
+                                    pal.text_primary,
+                                    egui::RichText::new("Search Chats").size(16.0).strong(),
+                                );
+                                ui.add_space(8.0);
+                                let resp = ui.add(
+                                    egui::TextEdit::singleline(&mut self.search_query)
+                                        .desired_width(f32::INFINITY)
+                                        .hint_text("Type to search..."),
+                                );
+                                if resp.changed() {
+                                    self.search_results = if self.search_query.len() >= 2 {
+                                        self.db.search(&self.search_query).unwrap_or_default()
+                                    } else {
+                                        Vec::new()
+                                    };
+                                    self.search_selected_idx = 0;
                                 }
-                                
-                                for (idx, (conv_id, title, snippet)) in items.iter().enumerate() {
-                                    let is_selected = idx == self.search_selected_idx;
-                                    let bg = if is_selected { pal.selected } else { egui::Color32::TRANSPARENT };
-                                    
-                                    let frame_resp = egui::Frame::new().fill(bg).corner_radius(6.0).inner_margin(egui::Margin::symmetric(8, 6)).show(ui, |ui| {
+                                // Only grab focus once when the modal first opens
+                                if self.search_just_opened {
+                                    resp.request_focus();
+                                    self.search_just_opened = false;
+                                }
+
+                                ui.add_space(8.0);
+                                let mut to_open: Option<String> = None;
+
+                                // Enter to select
+                                if ui.input(|i| i.key_pressed(egui::Key::Enter))
+                                    && item_count > 0
+                                    && self.search_selected_idx < items.len()
+                                {
+                                    to_open = Some(items[self.search_selected_idx].0.clone());
+                                }
+
+                                let hover_lock = self.search_hover_lock;
+                                let mut hovered_now: Option<usize> = None;
+                                egui::ScrollArea::vertical()
+                                    .max_height(400.0)
+                                    .auto_shrink([false, false])
+                                    .show(ui, |ui| {
                                         ui.set_width(ui.available_width());
-                                        ui.add(egui::Label::new(
-                                            egui::RichText::new(title).color(pal.text_primary).size(13.0).strong()
-                                        ).selectable(false));
-                                        if !snippet.is_empty() {
-                                            let snip = if snippet.chars().count() > 80 { snippet.chars().take(77).collect::<String>() + "..." } else { snippet.clone() };
-                                            ui.colored_label(pal.text_muted, egui::RichText::new(snip).size(11.5));
+
+                                        if items.is_empty() && self.search_query.len() >= 2 {
+                                            ui.colored_label(pal.text_muted, "No results");
+                                        } else if items.is_empty() && self.search_query.len() == 1 {
+                                            ui.colored_label(
+                                                pal.text_muted,
+                                                "Type more to search...",
+                                            );
+                                        }
+
+                                        for (idx, (conv_id, title, snippet)) in
+                                            items.iter().enumerate()
+                                        {
+                                            let is_selected = idx == self.search_selected_idx;
+                                            let bg = if is_selected {
+                                                pal.selected
+                                            } else {
+                                                egui::Color32::TRANSPARENT
+                                            };
+
+                                            let frame_resp = egui::Frame::new()
+                                                .fill(bg)
+                                                .corner_radius(6.0)
+                                                .inner_margin(egui::Margin::symmetric(8, 6))
+                                                .show(ui, |ui| {
+                                                    ui.set_width(ui.available_width());
+                                                    ui.add(
+                                                        egui::Label::new(
+                                                            egui::RichText::new(title)
+                                                                .color(pal.text_primary)
+                                                                .size(13.0)
+                                                                .strong(),
+                                                        )
+                                                        .selectable(false),
+                                                    );
+                                                    if !snippet.is_empty() {
+                                                        let snip = if snippet.chars().count() > 80 {
+                                                            snippet
+                                                                .chars()
+                                                                .take(77)
+                                                                .collect::<String>()
+                                                                + "..."
+                                                        } else {
+                                                            snippet.clone()
+                                                        };
+                                                        ui.colored_label(
+                                                            pal.text_muted,
+                                                            egui::RichText::new(snip).size(11.5),
+                                                        );
+                                                    }
+                                                });
+
+                                            let row_resp = ui.interact(
+                                                frame_resp.response.rect,
+                                                egui::Id::new(("search_row", idx)),
+                                                egui::Sense::click(),
+                                            );
+                                            if row_resp.clicked() {
+                                                to_open = Some(conv_id.clone());
+                                            }
+                                            if row_resp.hovered() {
+                                                hovered_now = Some(idx);
+                                                // Only let hover drive selection if this idx isn't the one locked out
+                                                if hover_lock != Some(idx) {
+                                                    self.search_selected_idx = idx;
+                                                }
+                                            }
+
+                                            ui.add_space(2.0);
                                         }
                                     });
-                                    
-                                    let row_resp = ui.interact(frame_resp.response.rect, egui::Id::new(("search_row", idx)), egui::Sense::click());
-                                    if row_resp.clicked() { to_open = Some(conv_id.clone()); }
-                                    if row_resp.hovered() { self.search_selected_idx = idx; }
-                                    
-                                    ui.add_space(2.0);
+
+                                // Apply arrow keys AFTER we know what's hovered this frame,
+                                // so we can record the hovered idx as the lock target.
+                                if arrow_down {
+                                    self.search_hover_lock = hovered_now;
+                                    self.search_selected_idx =
+                                        (self.search_selected_idx + 1).min(item_count - 1);
+                                }
+                                if arrow_up {
+                                    self.search_hover_lock = hovered_now;
+                                    self.search_selected_idx =
+                                        self.search_selected_idx.saturating_sub(1);
+                                }
+                                // Clear the lock once the mouse leaves that entry
+                                if let Some(locked) = self.search_hover_lock {
+                                    if hovered_now != Some(locked) {
+                                        self.search_hover_lock = None;
+                                    }
+                                }
+                                if let Some(id) = to_open {
+                                    self.select_conversation(&id);
+                                    self.show_search = false;
+                                }
+                                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                                    self.show_search = false;
                                 }
                             });
-                            if let Some(id) = to_open { self.select_conversation(&id); self.show_search = false; }
-                            if ui.input(|i| i.key_pressed(egui::Key::Escape)) { self.show_search = false; }
-                        });
                     });
             });
     }
@@ -556,27 +953,36 @@ impl ChatApp {
 
     fn render_model_picker(&mut self, ui: &mut egui::Ui) {
         let pal = self.pal.clone();
-        
+
         // Build filtered model list with indices
         let filter = self.model_filter.to_lowercase();
-        let filtered: Vec<usize> = MODELS.iter().enumerate()
-            .filter(|(_, m)| filter.is_empty() || m.name.to_lowercase().contains(&filter) || m.provider.to_lowercase().contains(&filter))
+        let filtered: Vec<usize> = MODELS
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| {
+                filter.is_empty()
+                    || m.name.to_lowercase().contains(&filter)
+                    || m.provider.to_lowercase().contains(&filter)
+            })
             .map(|(i, _)| i)
             .collect();
-        
+
         // Ensure hover index is valid and set to first if none
         if !filtered.is_empty() {
-            if self.model_picker_hover_idx.is_none() || !filtered.contains(&self.model_picker_hover_idx.unwrap()) {
+            if self.model_picker_hover_idx.is_none()
+                || !filtered.contains(&self.model_picker_hover_idx.unwrap())
+            {
                 self.model_picker_hover_idx = Some(filtered[0]);
             }
         }
-        
+
         // Handle keyboard navigation
         if !filtered.is_empty() {
-            let current_pos = self.model_picker_hover_idx
+            let current_pos = self
+                .model_picker_hover_idx
                 .and_then(|idx| filtered.iter().position(|&i| i == idx))
                 .unwrap_or(0);
-            
+
             if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
                 let new_pos = (current_pos + 1).min(filtered.len() - 1);
                 self.model_picker_hover_idx = Some(filtered[new_pos]);
@@ -593,12 +999,12 @@ impl ChatApp {
                 }
             }
         }
-        
+
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.show_model_picker = false;
             self.model_filter.clear();
         }
-        
+
         // Click outside to close
         egui::Area::new(egui::Id::new("model_picker_backdrop"))
             .fixed_pos(egui::pos2(0.0, 0.0))
@@ -611,62 +1017,104 @@ impl ChatApp {
                     self.model_filter.clear();
                 }
             });
-        
+
         egui::Area::new(egui::Id::new("model_picker_popup"))
-            .fixed_pos(self.model_picker_btn_rect.map(|r| egui::pos2(r.left(), r.bottom() + 4.0)).unwrap_or(egui::pos2(100.0, 60.0)))
+            .fixed_pos(
+                self.model_picker_btn_rect
+                    .map(|r| egui::pos2(r.left(), r.bottom() + 4.0))
+                    .unwrap_or(egui::pos2(100.0, 60.0)),
+            )
             .order(egui::Order::Foreground)
             .show(ui.ctx(), |ui| {
-                egui::Frame::new().fill(pal.bg_modal).corner_radius(12.0)
+                egui::Frame::new()
+                    .fill(pal.bg_modal)
+                    .corner_radius(12.0)
                     .stroke(egui::Stroke::new(1.0, pal.border))
-                    .inner_margin(egui::Margin::same(16)).show(ui, |ui| {
-                    ui.set_width(320.0);
-                    
-                    let filter_resp = ui.add(egui::TextEdit::singleline(&mut self.model_filter)
-                        .hint_text("Filter models...").desired_width(f32::INFINITY));
-                    filter_resp.request_focus();
-                    
-                    ui.add_space(8.0);
-                    
-                    egui::ScrollArea::vertical().max_height(500.0).auto_shrink([false, false]).show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        let mut last_provider = "";
-                        for &model_idx in &filtered {
-                            let m = &MODELS[model_idx];
-                            if m.provider != last_provider {
-                                if !last_provider.is_empty() { ui.add_space(6.0); }
-                                ui.colored_label(pal.text_muted, egui::RichText::new(m.provider).size(11.0).strong());
-                                ui.add_space(2.0);
-                                last_provider = m.provider;
-                            }
-                            
-                            let is_selected = self.model_picker_hover_idx == Some(model_idx);
-                            let is_current = self.model_idx == model_idx;
-                            let bg = if is_selected { pal.selected } else if is_current { pal.hover } else { egui::Color32::TRANSPARENT };
-                            
-                            let frame_resp = egui::Frame::new().fill(bg).corner_radius(4.0).inner_margin(egui::Margin::symmetric(8, 4)).show(ui, |ui| {
+                    .inner_margin(egui::Margin::same(16))
+                    .show(ui, |ui| {
+                        ui.set_width(320.0);
+
+                        let filter_resp = ui.add(
+                            egui::TextEdit::singleline(&mut self.model_filter)
+                                .hint_text("Filter models...")
+                                .desired_width(f32::INFINITY),
+                        );
+                        filter_resp.request_focus();
+
+                        ui.add_space(8.0);
+
+                        egui::ScrollArea::vertical()
+                            .max_height(500.0)
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
                                 ui.set_width(ui.available_width());
-                                let text_color = if is_current { pal.accent } else { pal.text_primary };
-                                ui.add(egui::Label::new(
-                                    egui::RichText::new(m.name).color(text_color).size(13.0)
-                                ).selectable(false));
+                                let mut last_provider = "";
+                                for &model_idx in &filtered {
+                                    let m = &MODELS[model_idx];
+                                    if m.provider != last_provider {
+                                        if !last_provider.is_empty() {
+                                            ui.add_space(6.0);
+                                        }
+                                        ui.colored_label(
+                                            pal.text_muted,
+                                            egui::RichText::new(m.provider).size(11.0).strong(),
+                                        );
+                                        ui.add_space(2.0);
+                                        last_provider = m.provider;
+                                    }
+
+                                    let is_selected =
+                                        self.model_picker_hover_idx == Some(model_idx);
+                                    let is_current = self.model_idx == model_idx;
+                                    let bg = if is_selected {
+                                        pal.selected
+                                    } else if is_current {
+                                        pal.hover
+                                    } else {
+                                        egui::Color32::TRANSPARENT
+                                    };
+
+                                    let frame_resp = egui::Frame::new()
+                                        .fill(bg)
+                                        .corner_radius(4.0)
+                                        .inner_margin(egui::Margin::symmetric(8, 4))
+                                        .show(ui, |ui| {
+                                            ui.set_width(ui.available_width());
+                                            let text_color = if is_current {
+                                                pal.accent
+                                            } else {
+                                                pal.text_primary
+                                            };
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(m.name)
+                                                        .color(text_color)
+                                                        .size(13.0),
+                                                )
+                                                .selectable(false),
+                                            );
+                                        });
+
+                                    let resp = ui.interact(
+                                        frame_resp.response.rect,
+                                        egui::Id::new(("model", model_idx)),
+                                        egui::Sense::click(),
+                                    );
+                                    if resp.clicked() {
+                                        self.model_idx = model_idx;
+                                        self.show_model_picker = false;
+                                        self.model_filter.clear();
+                                    }
+                                    if resp.hovered() {
+                                        self.model_picker_hover_idx = Some(model_idx);
+                                    }
+                                }
+
+                                if filtered.is_empty() {
+                                    ui.colored_label(pal.text_muted, "No matching models");
+                                }
                             });
-                            
-                            let resp = ui.interact(frame_resp.response.rect, egui::Id::new(("model", model_idx)), egui::Sense::click());
-                            if resp.clicked() {
-                                self.model_idx = model_idx;
-                                self.show_model_picker = false;
-                                self.model_filter.clear();
-                            }
-                            if resp.hovered() {
-                                self.model_picker_hover_idx = Some(model_idx);
-                            }
-                        }
-                        
-                        if filtered.is_empty() {
-                            ui.colored_label(pal.text_muted, "No matching models");
-                        }
                     });
-                });
             });
     }
 
@@ -679,89 +1127,240 @@ impl ChatApp {
 
         ui.vertical_centered(|ui| {
             ui.add_space(rect.height() * 0.20);
-            egui::Frame::new().inner_margin(egui::Margin::same(32)).corner_radius(16.0)
-                .fill(pal.bg_modal).stroke(egui::Stroke::new(1.0, pal.border)).show(ui, |ui| {
-                ui.set_width(400.0);
-                
-                // Header with close button if in settings mode
-                ui.horizontal(|ui| {
-                    ui.colored_label(pal.text_primary, egui::RichText::new(if is_settings { "Settings" } else { "Bedrock Chat" }).size(24.0).strong());
-                    if is_settings {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.add(egui::Button::new(egui::RichText::new("x").size(16.0).color(pal.text_muted))
-                                .fill(egui::Color32::TRANSPARENT).corner_radius(4.0).min_size(egui::vec2(28.0, 28.0))).clicked() {
-                                self.screen = Screen::Chat;
-                            }
-                        });
-                    }
-                });
-                
-                ui.add_space(6.0);
-                ui.colored_label(pal.text_secondary, "Paste your Bedrock API key, or skip to use\nyour existing AWS config.");
-                ui.add_space(16.0);
-                let Screen::Credentials(form) = &mut self.screen else { return; };
-                ui.colored_label(pal.text_secondary, "API Key");
-                ui.add_space(2.0);
-                ui.add(egui::TextEdit::singleline(&mut form.api_key).desired_width(f32::INFINITY).password(true).hint_text("Paste Bedrock API key..."));
-                ui.add_space(10.0);
-                ui.horizontal(|ui| {
-                    ui.colored_label(pal.text_secondary, "Region");
-                    ui.add_space(4.0);
-                    egui::ComboBox::from_id_salt("cred_region").selected_text(REGIONS[form.region_idx]).show_ui(ui, |ui| {
-                        for (i, region) in REGIONS.iter().enumerate() { ui.selectable_value(&mut form.region_idx, i, *region); }
+            egui::Frame::new()
+                .inner_margin(egui::Margin::same(32))
+                .corner_radius(16.0)
+                .fill(pal.bg_modal)
+                .stroke(egui::Stroke::new(1.0, pal.border))
+                .show(ui, |ui| {
+                    ui.set_width(400.0);
+
+                    // Header with close button if in settings mode
+                    ui.horizontal(|ui| {
+                        ui.colored_label(
+                            pal.text_primary,
+                            egui::RichText::new(if is_settings {
+                                "Settings"
+                            } else {
+                                "Bedrock Chat"
+                            })
+                            .size(24.0)
+                            .strong(),
+                        );
+                        if is_settings {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui
+                                        .add(
+                                            egui::Button::new(
+                                                egui::RichText::new("×")
+                                                    .size(18.0)
+                                                    .color(pal.text_muted),
+                                            )
+                                            .fill(egui::Color32::TRANSPARENT)
+                                            .corner_radius(4.0)
+                                            .min_size(egui::vec2(28.0, 28.0)),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.delete_all_confirming = false;
+                                        self.screen = Screen::Chat;
+                                    }
+                                },
+                            );
+                        }
                     });
-                });
-                ui.add_space(20.0);
-                ui.horizontal(|ui| {
-                    let Screen::Credentials(form) = &self.screen else { return; };
-                    let has_key = !form.api_key.trim().is_empty();
-                    if ui.add_enabled(has_key, egui::Button::new(
-                        egui::RichText::new("Save").color(if has_key { pal.bg_base } else { pal.text_muted })
-                    ).fill(if has_key { pal.accent } else { pal.bg_input }).corner_radius(8.0).min_size(egui::vec2(90.0, 32.0))).clicked() {
-                        let Screen::Credentials(form) = &self.screen else { return; };
-                        let key = form.api_key.trim().to_string();
-                        std::env::set_var("AWS_BEARER_TOKEN_BEDROCK", &key);
-                        let _ = self.db.set_config("api_key", &key);
-                        let _ = self.db.set_config("region", REGIONS[form.region_idx]);
-                        self.region_idx = form.region_idx;
-                        self.screen = Screen::Chat;
-                    }
-                    ui.add_space(8.0);
-                    if ui.add(egui::Button::new(egui::RichText::new(if is_settings { "Cancel" } else { "Skip" }).color(pal.text_secondary))
-                        .fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::new(1.0, pal.border)).corner_radius(8.0).min_size(egui::vec2(70.0, 32.0))).clicked() {
-                        let Screen::Credentials(form) = &self.screen else { return; };
-                        if !is_settings {
+
+                    ui.add_space(6.0);
+                    ui.colored_label(
+                        pal.text_secondary,
+                        "Paste your Bedrock API key, or skip to use\nyour existing AWS config.",
+                    );
+                    ui.add_space(16.0);
+                    let Screen::Credentials(form) = &mut self.screen else {
+                        return;
+                    };
+                    ui.colored_label(pal.text_secondary, "API Key");
+                    ui.add_space(2.0);
+                    ui.add(
+                        egui::TextEdit::singleline(&mut form.api_key)
+                            .desired_width(f32::INFINITY)
+                            .password(true)
+                            .hint_text("Paste Bedrock API key..."),
+                    );
+                    ui.add_space(10.0);
+                    ui.horizontal(|ui| {
+                        ui.colored_label(pal.text_secondary, "Region");
+                        ui.add_space(4.0);
+                        egui::ComboBox::from_id_salt("cred_region")
+                            .selected_text(REGIONS[form.region_idx])
+                            .show_ui(ui, |ui| {
+                                for (i, region) in REGIONS.iter().enumerate() {
+                                    ui.selectable_value(&mut form.region_idx, i, *region);
+                                }
+                            });
+                    });
+                    ui.add_space(20.0);
+                    ui.horizontal(|ui| {
+                        let Screen::Credentials(form) = &self.screen else {
+                            return;
+                        };
+                        let has_key = !form.api_key.trim().is_empty();
+                        if ui
+                            .add_enabled(
+                                has_key,
+                                egui::Button::new(egui::RichText::new("Save").color(if has_key {
+                                    pal.bg_base
+                                } else {
+                                    pal.text_muted
+                                }))
+                                .fill(if has_key { pal.accent } else { pal.bg_input })
+                                .corner_radius(8.0)
+                                .min_size(egui::vec2(90.0, 32.0)),
+                            )
+                            .clicked()
+                        {
+                            let Screen::Credentials(form) = &self.screen else {
+                                return;
+                            };
+                            let key = form.api_key.trim().to_string();
+                            std::env::set_var("AWS_BEARER_TOKEN_BEDROCK", &key);
+                            let _ = self.db.set_config("api_key", &key);
                             let _ = self.db.set_config("region", REGIONS[form.region_idx]);
                             self.region_idx = form.region_idx;
+                            self.screen = Screen::Chat;
                         }
-                        self.screen = Screen::Chat;
+                        ui.add_space(8.0);
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new(if is_settings {
+                                        "Cancel"
+                                    } else {
+                                        "Skip"
+                                    })
+                                    .color(pal.text_secondary),
+                                )
+                                .fill(egui::Color32::TRANSPARENT)
+                                .stroke(egui::Stroke::new(1.0, pal.border))
+                                .corner_radius(8.0)
+                                .min_size(egui::vec2(70.0, 32.0)),
+                            )
+                            .clicked()
+                        {
+                            let Screen::Credentials(form) = &self.screen else {
+                                return;
+                            };
+                            if !is_settings {
+                                let _ = self.db.set_config("region", REGIONS[form.region_idx]);
+                                self.region_idx = form.region_idx;
+                            }
+                            self.screen = Screen::Chat;
+                        }
+                    });
+
+                    // Delete all chats section (only in settings mode)
+                    if is_settings {
+                        ui.add_space(24.0);
+                        ui.separator();
+                        ui.add_space(12.0);
+                        ui.colored_label(
+                            pal.text_secondary,
+                            egui::RichText::new("Danger Zone").size(13.0).strong(),
+                        );
+                        ui.add_space(4.0);
+                        ui.colored_label(
+                            pal.text_muted,
+                            egui::RichText::new(
+                                "This only deletes local chat history.\nNo data is stored on AWS.",
+                            )
+                            .size(11.0),
+                        );
+                        ui.add_space(8.0);
+
+                        let now = ui.input(|i| i.time);
+                        let feedback_visible =
+                            self.delete_all_feedback_until.map_or(false, |t| now < t);
+
+                        if feedback_visible {
+                            ui.colored_label(
+                                pal.accent,
+                                egui::RichText::new("✓ All chats deleted")
+                                    .size(13.0)
+                                    .strong(),
+                            );
+                            ui.ctx().request_repaint();
+                        } else if self.delete_all_confirming {
+                            ui.colored_label(
+                                pal.error,
+                                egui::RichText::new("Are you sure? This cannot be undone.")
+                                    .size(12.0),
+                            );
+                            ui.add_space(4.0);
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            egui::RichText::new("Yes, delete all")
+                                                .color(egui::Color32::WHITE),
+                                        )
+                                        .fill(pal.error)
+                                        .corner_radius(8.0)
+                                        .min_size(egui::vec2(140.0, 32.0)),
+                                    )
+                                    .clicked()
+                                {
+                                    let ids: Vec<String> =
+                                        self.conversations.iter().map(|c| c.id.clone()).collect();
+                                    for id in ids {
+                                        let _ = self.db.delete_conversation(&id);
+                                    }
+                                    self.conversations.clear();
+                                    self.active_id = None;
+                                    self.messages.clear();
+                                    self.md_caches.clear();
+                                    self.conv_usage = TokenUsage::default();
+                                    self.last_usage = None;
+                                    self.ephemeral_id = None;
+                                    self.delete_all_confirming = false;
+                                    self.delete_all_feedback_until = Some(now + 3.0);
+                                    info!("deleted all chats");
+                                }
+                                ui.add_space(6.0);
+                                if ui
+                                    .add(
+                                        egui::Button::new(
+                                            egui::RichText::new("Cancel").color(pal.text_secondary),
+                                        )
+                                        .fill(egui::Color32::TRANSPARENT)
+                                        .stroke(egui::Stroke::new(1.0, pal.border))
+                                        .corner_radius(8.0)
+                                        .min_size(egui::vec2(80.0, 32.0)),
+                                    )
+                                    .clicked()
+                                {
+                                    self.delete_all_confirming = false;
+                                }
+                            });
+                        } else {
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        egui::RichText::new("Delete All Chats").color(pal.error),
+                                    )
+                                    .fill(egui::Color32::TRANSPARENT)
+                                    .stroke(egui::Stroke::new(1.0, pal.error))
+                                    .corner_radius(8.0)
+                                    .min_size(egui::vec2(140.0, 32.0)),
+                                )
+                                .clicked()
+                            {
+                                self.delete_all_confirming = true;
+                            }
+                        }
                     }
                 });
-                
-                // Delete all chats section (only in settings mode)
-                if is_settings {
-                    ui.add_space(24.0);
-                    ui.separator();
-                    ui.add_space(12.0);
-                    ui.colored_label(pal.text_secondary, egui::RichText::new("Danger Zone").size(13.0).strong());
-                    ui.add_space(4.0);
-                    ui.colored_label(pal.text_muted, egui::RichText::new("This only deletes local chat history.\nNo data is stored on AWS.").size(11.0));
-                    ui.add_space(8.0);
-                    if ui.add(egui::Button::new(egui::RichText::new("Delete All Chats").color(pal.error))
-                        .fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::new(1.0, pal.error)).corner_radius(8.0).min_size(egui::vec2(130.0, 32.0))).clicked() {
-                        // Delete all conversations
-                        let ids: Vec<String> = self.conversations.iter().map(|c| c.id.clone()).collect();
-                        for id in ids { let _ = self.db.delete_conversation(&id); }
-                        self.conversations.clear();
-                        self.active_id = None;
-                        self.messages.clear();
-                        self.md_caches.clear();
-                        self.conv_usage = TokenUsage::default();
-                        self.last_usage = None;
-                        info!("deleted all chats");
-                    }
-                }
-            });
         });
     }
 
@@ -773,104 +1372,504 @@ impl ChatApp {
         ui.add_space(8.0);
         ui.horizontal(|ui| {
             ui.add_space(8.0);
-            ui.colored_label(pal.text_primary, egui::RichText::new("Chats").size(16.0).strong());
+            ui.colored_label(
+                pal.text_primary,
+                egui::RichText::new("Chats").size(16.0).strong(),
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
-                // Settings gear button (use @ as gear substitute)
-                if ui.add(egui::Button::new(egui::RichText::new("@").size(14.0).color(pal.text_muted))
-                    .fill(egui::Color32::TRANSPARENT).corner_radius(6.0).min_size(egui::vec2(28.0, 28.0)))
+                // Settings gear button
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new("⚙").size(18.0).color(pal.text_muted),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .corner_radius(6.0)
+                        .min_size(egui::vec2(28.0, 28.0)),
+                    )
                     .on_hover_text("Settings")
-                    .clicked() {
-                    self.screen = Screen::Credentials(CredentialForm { api_key: String::new(), region_idx: self.region_idx, is_settings: true });
+                    .clicked()
+                {
+                    self.delete_all_confirming = false;
+                    self.delete_all_feedback_until = None;
+                    self.screen = Screen::Credentials(CredentialForm {
+                        api_key: String::new(),
+                        region_idx: self.region_idx,
+                        is_settings: true,
+                    });
                 }
                 // New chat button
-                let new_btn = ui.add(egui::Button::new(egui::RichText::new("+").size(16.0).color(pal.accent))
-                    .fill(egui::Color32::TRANSPARENT).corner_radius(6.0).min_size(egui::vec2(28.0, 28.0)))
+                let new_btn = ui
+                    .add(
+                        egui::Button::new(egui::RichText::new("+").size(18.0).color(pal.accent))
+                            .fill(egui::Color32::TRANSPARENT)
+                            .corner_radius(6.0)
+                            .min_size(egui::vec2(28.0, 28.0)),
+                    )
                     .on_hover_text("New chat");
                 if new_btn.clicked() {
-                    self.burst.spawn(new_btn.rect.center(), 20);
-                    self.new_conversation();
+                    let active_is_empty_regular = self.active_id.is_some()
+                        && self.messages.is_empty()
+                        && !self.is_streaming
+                        && self.active_id != self.ephemeral_id;
+                    if active_is_empty_regular {
+                        // Already sitting in an empty regular chat — pulse it instead of creating another
+                        let now = ui.input(|i| i.time);
+                        self.pulse_active_until = Some(now + 0.6);
+                        self.burst.spawn(new_btn.rect.center(), 8);
+                    } else {
+                        // Force regular mode so we don't accidentally create a new ephemeral
+                        self.ephemeral = false;
+                        self.burst.spawn(new_btn.rect.center(), 20);
+                        self.new_conversation();
+                    }
                 }
-                // Ephemeral toggle - creates new chat only when turning on AND current chat has messages
-                let eph_label = if self.ephemeral { "~" } else { "~" };
-                let eph_btn = ui.add(egui::Button::new(egui::RichText::new(eph_label).size(14.0)
-                    .color(if self.ephemeral { pal.accent } else { pal.text_muted }))
-                    .fill(if self.ephemeral { pal.selected } else { egui::Color32::TRANSPARENT })
-                    .corner_radius(6.0).min_size(egui::vec2(28.0, 28.0)))
-                    .on_hover_text(if self.ephemeral { "Ephemeral ON (click to exit)" } else { "New ephemeral chat" });
-                if eph_btn.clicked() {
-                    if !self.ephemeral {
-                        // Turning ON ephemeral - only create new chat if current has messages
-                        self.ephemeral = true;
-                        if self.messages.is_empty() && self.active_id.is_some() {
-                            // Already in empty chat, just mark it ephemeral (it won't be saved)
+                // Ephemeral button: tri-state icon based on state
+                let eph_label = match (&self.ephemeral_id, self.ephemeral) {
+                    (Some(_), true) => "◉",  // ephemeral exists AND is active
+                    (Some(_), false) => "◐", // ephemeral exists, not active (expiring)
+                    (None, _) => "○",        // no ephemeral
+                };
+                let eph_btn = ui
+                    .add(
+                        egui::Button::new(egui::RichText::new(eph_label).size(14.0).color(
+                            if self.ephemeral {
+                                pal.accent
+                            } else if self.ephemeral_id.is_some() {
+                                pal.accent_dim
+                            } else {
+                                pal.text_muted
+                            },
+                        ))
+                        .fill(if self.ephemeral {
+                            pal.selected
                         } else {
-                            self.burst.spawn(eph_btn.rect.center(), 20);
-                            self.new_conversation();
+                            egui::Color32::TRANSPARENT
+                        })
+                        .corner_radius(6.0)
+                        .min_size(egui::vec2(28.0, 28.0)),
+                    )
+                    .on_hover_text(match (&self.ephemeral_id, self.ephemeral) {
+                        (Some(_), true) => "Already in ephemeral chat",
+                        (Some(_), false) => "Resume ephemeral chat",
+                        (None, _) => "New ephemeral chat",
+                    });
+                if eph_btn.clicked() {
+                    if let Some(eph_id) = self.ephemeral_id.clone() {
+                        if !self.ephemeral {
+                            // Re-enter the existing ephemeral chat
+                            self.ephemeral = true;
+                            self.select_conversation(&eph_id);
+                        } else {
+                            // Already active ephemeral — pulse instead of recreating
+                            let now = ui.input(|i| i.time);
+                            self.pulse_active_until = Some(now + 0.6);
+                            self.burst.spawn(eph_btn.rect.center(), 8);
                         }
                     } else {
-                        // Turning OFF ephemeral
-                        self.ephemeral = false;
+                        self.ephemeral = true;
+                        self.burst.spawn(eph_btn.rect.center(), 20);
+                        self.new_conversation();
                     }
                 }
                 // Search button
-                if ui.add(egui::Button::new(egui::RichText::new("/").size(14.0).color(pal.text_muted))
-                    .fill(egui::Color32::TRANSPARENT).corner_radius(6.0).min_size(egui::vec2(28.0, 28.0)))
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new("🔎").size(14.0).color(pal.text_muted),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .corner_radius(6.0)
+                        .min_size(egui::vec2(28.0, 28.0)),
+                    )
                     .on_hover_text("Search chats (Cmd+K)")
-                    .clicked() {
-                    self.show_search = true; self.search_just_opened = true; self.search_query.clear(); self.search_results.clear();
+                    .clicked()
+                {
+                    self.show_search = true;
+                    self.search_just_opened = true;
+                    self.search_query.clear();
+                    self.search_results.clear();
                     self.search_selected_idx = 0;
+                    self.search_hover_lock = None;
                 }
             });
         });
         ui.add_space(4.0);
         let r = ui.available_rect_before_wrap();
-        ui.painter().line_segment([r.left_top(), egui::pos2(r.right(), r.top())], egui::Stroke::new(1.0, pal.border));
+        ui.painter().line_segment(
+            [r.left_top(), egui::pos2(r.right(), r.top())],
+            egui::Stroke::new(1.0, pal.border),
+        );
         ui.add_space(6.0);
 
         let active_id = self.active_id.clone();
+        let ephemeral_id = self.ephemeral_id.clone();
+        let ephemeral_expiry = self.ephemeral_expiry;
+        let pulse_until = self.pulse_active_until;
+        let now_t = ui.input(|i| i.time);
         let mut to_select: Option<String> = None;
         let mut to_delete: Option<String> = None;
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            for conv in &self.conversations {
-                let is_active = active_id.as_deref() == Some(&conv.id);
-                let conv_id = conv.id.clone();
-                let title: String = if conv.title.chars().count() > 28 { conv.title.chars().take(25).collect::<String>() + "..." } else { conv.title.clone() };
-                
+        // Rename state: take the draft out so we can mutably pass it to TextEdit
+        // while still iterating &self.conversations. Put it back after the loop.
+        let mut renaming_id = self.renaming_id.clone();
+        let mut rename_draft = std::mem::take(&mut self.rename_draft);
+        let mut rename_just_started = self.rename_just_started;
+        let mut rename_commit: Option<(String, String)> = None;
+        let mut rename_start: Option<(String, String)> = None;
+
+        // Pinned ephemeral entry above the scroll area
+        if let Some(eph_id) = &ephemeral_id {
+            if let Some(conv) = self.conversations.iter().find(|c| c.id == *eph_id) {
+                let is_active = active_id.as_deref() == Some(eph_id.as_str());
+                let title: String = if conv.title.chars().count() > 28 {
+                    conv.title.chars().take(25).collect::<String>() + "..."
+                } else {
+                    conv.title.clone()
+                };
+                let expiry_text = ephemeral_expiry.filter(|_| !is_active).map(|exp| {
+                    let remaining = (exp - now_t).max(0.0).ceil() as i32;
+                    format!("expires in {}s", remaining)
+                });
+
                 let row_rect = ui.available_rect_before_wrap();
                 let is_hovered = ui.rect_contains_pointer(egui::Rect::from_min_size(
-                    row_rect.min, egui::vec2(ui.available_width(), 32.0)
+                    row_rect.min,
+                    egui::vec2(ui.available_width(), 38.0),
                 ));
-                let bg = if is_active { pal.selected } else if is_hovered { pal.hover } else { egui::Color32::TRANSPARENT };
-                
-                let frame_resp = egui::Frame::new().fill(bg).corner_radius(8.0).inner_margin(egui::Margin::symmetric(10, 6)).outer_margin(egui::Margin::symmetric(4, 1)).show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.horizontal(|ui| {
-                        let tc = if is_active { pal.text_primary } else { pal.text_secondary };
-                        ui.add(egui::Label::new(egui::RichText::new(&title).color(tc).size(13.0)).selectable(false));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            // Always show button but only visible when hovered/active
-                            let btn_color = if is_active || is_hovered { pal.text_muted } else { egui::Color32::TRANSPARENT };
-                            let del_btn = ui.add(egui::Button::new(egui::RichText::new("x").color(btn_color).size(12.0))
-                                .fill(egui::Color32::TRANSPARENT).min_size(egui::vec2(20.0, 20.0)));
-                            if del_btn.clicked() {
-                                to_delete = Some(conv_id.clone());
-                            }
+                let bg = if is_active {
+                    pal.selected
+                } else if is_hovered {
+                    pal.hover
+                } else {
+                    egui::Color32::TRANSPARENT
+                };
+
+                let is_renaming = renaming_id.as_deref() == Some(eph_id.as_str());
+                let mut del_btn_rect: Option<egui::Rect> = None;
+                let frame_resp = egui::Frame::new()
+                    .fill(bg)
+                    .corner_radius(8.0)
+                    .inner_margin(egui::Margin::symmetric(10, 6))
+                    .outer_margin(egui::Margin::symmetric(4, 1))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                let tc = if is_active {
+                                    pal.text_primary
+                                } else {
+                                    pal.text_secondary
+                                };
+                                if is_renaming {
+                                    let te = ui.add(
+                                        egui::TextEdit::singleline(&mut rename_draft)
+                                            .desired_width(ui.available_width() - 28.0)
+                                            .text_color(tc),
+                                    );
+                                    if rename_just_started {
+                                        te.request_focus();
+                                        rename_just_started = false;
+                                    }
+                                    let enter = te.has_focus()
+                                        && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                    if enter || te.lost_focus() {
+                                        rename_commit =
+                                            Some((eph_id.clone(), rename_draft.clone()));
+                                        renaming_id = None;
+                                    }
+                                } else {
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(&title)
+                                                .color(tc)
+                                                .size(13.0)
+                                                .italics(),
+                                        )
+                                        .selectable(false),
+                                    );
+                                }
+                                if let Some(ref txt) = expiry_text {
+                                    ui.colored_label(
+                                        pal.text_muted,
+                                        egui::RichText::new(txt).size(10.5).italics(),
+                                    );
+                                }
+                            });
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let btn_color = if is_active || is_hovered {
+                                        pal.text_muted
+                                    } else {
+                                        egui::Color32::TRANSPARENT
+                                    };
+                                    let del_btn = ui.add(
+                                        egui::Button::new(
+                                            egui::RichText::new("×").color(btn_color).size(14.0),
+                                        )
+                                        .fill(egui::Color32::TRANSPARENT)
+                                        .min_size(egui::vec2(22.0, 22.0)),
+                                    );
+                                    del_btn_rect = Some(del_btn.rect);
+                                },
+                            );
                         });
                     });
+
+                let row_resp = ui.interact(
+                    frame_resp.response.rect,
+                    egui::Id::new(("eph_row", eph_id)),
+                    egui::Sense::click(),
+                );
+                if !is_renaming && row_resp.clicked() {
+                    let click_on_x = row_resp
+                        .interact_pointer_pos()
+                        .and_then(|p| del_btn_rect.map(|r| r.expand(2.0).contains(p)))
+                        .unwrap_or(false);
+                    if click_on_x {
+                        to_delete = Some(eph_id.clone());
+                    } else if !is_active {
+                        to_select = Some(eph_id.clone());
+                    }
+                }
+                let eph_id_clone = eph_id.clone();
+                let conv_title = conv.title.clone();
+                row_resp.context_menu(|ui| {
+                    if ui.button("✎  Rename").clicked() {
+                        rename_start = Some((eph_id_clone.clone(), conv_title.clone()));
+                        ui.close_menu();
+                    }
+                    if ui.button("×  Delete").clicked() {
+                        to_delete = Some(eph_id_clone.clone());
+                        ui.close_menu();
+                    }
                 });
-                
-                // Only handle row click if delete wasn't clicked
-                if to_delete.is_none() {
-                    let row_resp = ui.interact(frame_resp.response.rect, egui::Id::new(("conv_row", &conv_id)), egui::Sense::click());
-                    if row_resp.clicked() && !is_active {
-                        to_select = Some(conv_id);
+
+                // Pulse border on the active chat row
+                if is_active {
+                    if let Some(until) = pulse_until {
+                        if now_t < until {
+                            let t = ((until - now_t) as f32 / 0.6).clamp(0.0, 1.0);
+                            let alpha = (t * 220.0) as u8;
+                            ui.painter().rect_stroke(
+                                frame_resp.response.rect,
+                                egui::CornerRadius::same(8),
+                                egui::Stroke::new(
+                                    2.0,
+                                    egui::Color32::from_rgba_unmultiplied(
+                                        pal.accent.r(),
+                                        pal.accent.g(),
+                                        pal.accent.b(),
+                                        alpha,
+                                    ),
+                                ),
+                                egui::StrokeKind::Outside,
+                            );
+                            ui.ctx().request_repaint();
+                        }
+                    }
+                }
+
+                // Divider between ephemeral and regular list
+                ui.add_space(4.0);
+                let dr = ui.available_rect_before_wrap();
+                let pad = 12.0;
+                ui.painter().line_segment(
+                    [
+                        egui::pos2(dr.left() + pad, dr.top()),
+                        egui::pos2(dr.right() - pad, dr.top()),
+                    ],
+                    egui::Stroke::new(1.0, pal.border),
+                );
+                ui.add_space(4.0);
+            }
+        }
+
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for conv in &self.conversations {
+                // Ephemeral is rendered above; skip it here
+                if ephemeral_id.as_deref() == Some(&conv.id) {
+                    continue;
+                }
+
+                let is_active = active_id.as_deref() == Some(&conv.id);
+                let conv_id = conv.id.clone();
+                let title: String = if conv.title.chars().count() > 28 {
+                    conv.title.chars().take(25).collect::<String>() + "..."
+                } else {
+                    conv.title.clone()
+                };
+
+                let row_rect = ui.available_rect_before_wrap();
+                let is_hovered = ui.rect_contains_pointer(egui::Rect::from_min_size(
+                    row_rect.min,
+                    egui::vec2(ui.available_width(), 34.0),
+                ));
+                let bg = if is_active {
+                    pal.selected
+                } else if is_hovered {
+                    pal.hover
+                } else {
+                    egui::Color32::TRANSPARENT
+                };
+
+                let is_renaming = renaming_id.as_deref() == Some(conv_id.as_str());
+                let mut del_btn_rect: Option<egui::Rect> = None;
+                let frame_resp = egui::Frame::new()
+                    .fill(bg)
+                    .corner_radius(8.0)
+                    .inner_margin(egui::Margin::symmetric(10, 6))
+                    .outer_margin(egui::Margin::symmetric(4, 1))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            let tc = if is_active {
+                                pal.text_primary
+                            } else {
+                                pal.text_secondary
+                            };
+                            if is_renaming {
+                                let te = ui.add(
+                                    egui::TextEdit::singleline(&mut rename_draft)
+                                        .desired_width(ui.available_width() - 28.0)
+                                        .text_color(tc),
+                                );
+                                if rename_just_started {
+                                    te.request_focus();
+                                    rename_just_started = false;
+                                }
+                                let enter =
+                                    te.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                if enter || te.lost_focus() {
+                                    rename_commit = Some((conv_id.clone(), rename_draft.clone()));
+                                    renaming_id = None;
+                                }
+                            } else {
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(&title).color(tc).size(13.0),
+                                    )
+                                    .selectable(false),
+                                );
+                            }
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let btn_color = if is_active || is_hovered {
+                                        pal.text_muted
+                                    } else {
+                                        egui::Color32::TRANSPARENT
+                                    };
+                                    let del_btn = ui.add(
+                                        egui::Button::new(
+                                            egui::RichText::new("×").color(btn_color).size(14.0),
+                                        )
+                                        .fill(egui::Color32::TRANSPARENT)
+                                        .min_size(egui::vec2(22.0, 22.0)),
+                                    );
+                                    del_btn_rect = Some(del_btn.rect);
+                                },
+                            );
+                        });
+                    });
+
+                let row_resp = ui.interact(
+                    frame_resp.response.rect,
+                    egui::Id::new(("conv_row", &conv_id)),
+                    egui::Sense::click(),
+                );
+                if !is_renaming && row_resp.clicked() {
+                    let click_on_x = row_resp
+                        .interact_pointer_pos()
+                        .and_then(|p| del_btn_rect.map(|r| r.expand(2.0).contains(p)))
+                        .unwrap_or(false);
+                    if click_on_x {
+                        to_delete = Some(conv_id.clone());
+                    } else if !is_active {
+                        to_select = Some(conv_id.clone());
+                    }
+                }
+                let conv_id_ctx = conv_id.clone();
+                let conv_title_ctx = conv.title.clone();
+                row_resp.context_menu(|ui| {
+                    if ui.button("✎  Rename").clicked() {
+                        rename_start = Some((conv_id_ctx.clone(), conv_title_ctx.clone()));
+                        ui.close_menu();
+                    }
+                    if ui.button("×  Delete").clicked() {
+                        to_delete = Some(conv_id_ctx.clone());
+                        ui.close_menu();
+                    }
+                });
+
+                // Pulse border on the active chat row
+                if is_active {
+                    if let Some(until) = pulse_until {
+                        if now_t < until {
+                            let t = ((until - now_t) as f32 / 0.6).clamp(0.0, 1.0);
+                            let alpha = (t * 220.0) as u8;
+                            ui.painter().rect_stroke(
+                                frame_resp.response.rect,
+                                egui::CornerRadius::same(8),
+                                egui::Stroke::new(
+                                    2.0,
+                                    egui::Color32::from_rgba_unmultiplied(
+                                        pal.accent.r(),
+                                        pal.accent.g(),
+                                        pal.accent.b(),
+                                        alpha,
+                                    ),
+                                ),
+                                egui::StrokeKind::Outside,
+                            );
+                            ui.ctx().request_repaint();
+                        }
                     }
                 }
             }
         });
-        if let Some(id) = to_delete { self.delete_conversation(&id); }
-        else if let Some(id) = to_select { self.select_conversation(&id); }
+
+        // Clear stale pulse
+        if let Some(until) = self.pulse_active_until {
+            if now_t >= until {
+                self.pulse_active_until = None;
+            }
+        }
+
+        // Restore rename state; apply any commits / starts produced during rendering
+        self.renaming_id = renaming_id;
+        self.rename_draft = rename_draft;
+        self.rename_just_started = rename_just_started;
+        if ui.input(|i| i.key_pressed(egui::Key::Escape)) && self.renaming_id.is_some() {
+            self.renaming_id = None;
+        }
+        if let Some((id, title)) = rename_commit {
+            let trimmed = title.trim().to_string();
+            if !trimmed.is_empty() {
+                if let Some(conv) = self.conversations.iter_mut().find(|c| c.id == id) {
+                    conv.title = trimmed;
+                    conv.updated_at = chrono::Utc::now();
+                }
+                // Persist unless it's the ephemeral chat
+                if self.ephemeral_id.as_deref() != Some(id.as_str()) {
+                    if let Some(conv) = self.conversations.iter().find(|c| c.id == id) {
+                        let _ = self.db.upsert_conversation(conv);
+                    }
+                }
+            }
+        }
+        if let Some((id, title)) = rename_start {
+            self.renaming_id = Some(id);
+            self.rename_draft = title;
+            self.rename_just_started = true;
+        }
+
+        if let Some(id) = to_delete {
+            self.delete_conversation(&id);
+        } else if let Some(id) = to_select {
+            self.select_conversation(&id);
+        }
     }
 
     // ── Chat pane ──────────────────────────────────────────────────────
@@ -880,31 +1879,65 @@ impl ChatApp {
         let full_rect = ui.max_rect();
         ui.painter().rect_filled(full_rect, 0.0, pal.bg_base);
 
-        // Draw faint ghost for ephemeral mode
+        // Subtle ephemeral indicator: dashed border + centered watermark text
         if self.ephemeral {
-            let center = full_rect.center();
-            let ghost_color = egui::Color32::from_rgba_unmultiplied(
-                pal.text_muted.r(), pal.text_muted.g(), pal.text_muted.b(), 15
+            let watermark = egui::Color32::from_rgba_unmultiplied(
+                pal.text_muted.r(),
+                pal.text_muted.g(),
+                pal.text_muted.b(),
+                45,
             );
-            // Simple ghost shape: head circle + body
-            let head_center = egui::pos2(center.x, center.y - 30.0);
-            ui.painter().circle_filled(head_center, 40.0, ghost_color);
-            // Body (rounded rect below)
-            let body_rect = egui::Rect::from_center_size(
-                egui::pos2(center.x, center.y + 30.0),
-                egui::vec2(80.0, 70.0)
+            // Dashed border outline
+            let border_color = egui::Color32::from_rgba_unmultiplied(
+                pal.text_muted.r(),
+                pal.text_muted.g(),
+                pal.text_muted.b(),
+                55,
             );
-            ui.painter().rect_filled(body_rect, 20.0, ghost_color);
-            // Eyes
-            let eye_color = egui::Color32::from_rgba_unmultiplied(
-                pal.bg_base.r(), pal.bg_base.g(), pal.bg_base.b(), 30
-            );
-            ui.painter().circle_filled(egui::pos2(center.x - 15.0, center.y - 35.0), 8.0, eye_color);
-            ui.painter().circle_filled(egui::pos2(center.x + 15.0, center.y - 35.0), 8.0, eye_color);
-            // Wavy bottom (3 bumps)
-            for i in 0..3 {
-                let bx = center.x - 30.0 + (i as f32 * 30.0);
-                ui.painter().circle_filled(egui::pos2(bx, center.y + 65.0), 15.0, ghost_color);
+            let inset = full_rect.shrink(8.0);
+            let dash_len = 8.0;
+            let gap_len = 6.0;
+            let stroke = egui::Stroke::new(1.0, border_color);
+            // Top and bottom edges
+            let mut x = inset.left();
+            while x < inset.right() {
+                let xe = (x + dash_len).min(inset.right());
+                ui.painter().line_segment(
+                    [egui::pos2(x, inset.top()), egui::pos2(xe, inset.top())],
+                    stroke,
+                );
+                ui.painter().line_segment(
+                    [
+                        egui::pos2(x, inset.bottom()),
+                        egui::pos2(xe, inset.bottom()),
+                    ],
+                    stroke,
+                );
+                x += dash_len + gap_len;
+            }
+            // Left and right edges
+            let mut y = inset.top();
+            while y < inset.bottom() {
+                let ye = (y + dash_len).min(inset.bottom());
+                ui.painter().line_segment(
+                    [egui::pos2(inset.left(), y), egui::pos2(inset.left(), ye)],
+                    stroke,
+                );
+                ui.painter().line_segment(
+                    [egui::pos2(inset.right(), y), egui::pos2(inset.right(), ye)],
+                    stroke,
+                );
+                y += dash_len + gap_len;
+            }
+            // Watermark only when no messages yet
+            if self.messages.is_empty() {
+                ui.painter().text(
+                    full_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "ephemeral · not saved",
+                    egui::FontId::proportional(14.0),
+                    watermark,
+                );
             }
         }
 
@@ -915,27 +1948,41 @@ impl ChatApp {
         }
 
         if self.active_id.is_none() {
-            ui.centered_and_justified(|ui| { ui.colored_label(pal.text_muted, "Select or create a conversation"); });
+            ui.centered_and_justified(|ui| {
+                ui.colored_label(pal.text_muted, "Select or create a conversation");
+            });
             return;
         }
 
         self.render_top_bar(ui);
         let r = ui.available_rect_before_wrap();
-        ui.painter().line_segment([r.left_top(), egui::pos2(r.right(), r.top())], egui::Stroke::new(1.0, pal.border));
+        ui.painter().line_segment(
+            [r.left_top(), egui::pos2(r.right(), r.top())],
+            egui::Stroke::new(1.0, pal.border),
+        );
         ui.add_space(2.0);
 
         let input_h = 100.0;
         let avail = ui.available_height() - input_h;
-        ui.allocate_ui(egui::vec2(ui.available_width(), avail.max(100.0)), |ui| { self.render_messages(ui); });
+        ui.allocate_ui(egui::vec2(ui.available_width(), avail.max(100.0)), |ui| {
+            self.render_messages(ui);
+        });
 
         if let Some(err) = self.last_error.clone() {
             ui.horizontal(|ui| {
-                ui.add_space(16.0); ui.colored_label(pal.error, &err);
-                if ui.small_button("dismiss").clicked() { self.last_error = None; }
+                ui.add_space(16.0);
+                ui.colored_label(pal.error, &err);
+                if ui.small_button("dismiss").clicked() {
+                    self.last_error = None;
+                }
             });
         }
         if self.is_compacting {
-            ui.horizontal(|ui| { ui.add_space(16.0); ui.spinner(); ui.colored_label(pal.text_muted, "Compacting context..."); });
+            ui.horizontal(|ui| {
+                ui.add_space(16.0);
+                ui.spinner();
+                ui.colored_label(pal.text_muted, "Compacting context...");
+            });
         }
 
         self.render_input(ui);
@@ -944,101 +1991,166 @@ impl ChatApp {
     fn render_top_bar(&mut self, ui: &mut egui::Ui) {
         let pal = self.pal.clone();
         let has_msgs = self.conv_has_messages();
-        egui::Frame::new().fill(pal.bg_topbar).inner_margin(egui::Margin::symmetric(12, 8)).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.colored_label(pal.text_secondary, "Model");
-                ui.add_space(2.0);
-                let current_name = MODELS[self.model_idx].name;
-                
-                // Custom model picker button (use simple "v" for caret)
-                let btn_resp = ui.add(egui::Button::new(
-                    egui::RichText::new(format!("{}  v", current_name)).color(pal.text_primary)
-                ).fill(pal.bg_input).stroke(egui::Stroke::new(1.0, pal.border)).corner_radius(6.0).min_size(egui::vec2(220.0, 24.0)));
-                
-                // Store button rect for popup positioning
-                self.model_picker_btn_rect = Some(btn_resp.rect);
-                
-                if btn_resp.clicked() {
-                    self.show_model_picker = !self.show_model_picker;
-                    if self.show_model_picker {
-                        self.model_filter.clear();
-                        self.model_picker_hover_idx = Some(self.model_idx);
-                    }
-                }
+        egui::Frame::new()
+            .fill(pal.bg_topbar)
+            .inner_margin(egui::Margin::symmetric(12, 8))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.colored_label(pal.text_secondary, "Model");
+                    ui.add_space(2.0);
+                    let current_name = MODELS[self.model_idx].name;
 
-                ui.add_space(8.0);
-                ui.colored_label(pal.text_secondary, "Region");
-                ui.add_space(2.0);
-                if has_msgs {
-                    ui.colored_label(pal.text_muted, REGIONS[self.region_idx]);
-                } else {
-                    egui::ComboBox::from_id_salt("region_picker").selected_text(REGIONS[self.region_idx]).show_ui(ui, |ui| {
-                        for (i, region) in REGIONS.iter().enumerate() { ui.selectable_value(&mut self.region_idx, i, *region); }
-                    });
-                }
+                    // Custom model picker button
+                    let btn_resp = ui.add(
+                        egui::Button::new(
+                            egui::RichText::new(format!("{}  ▾", current_name))
+                                .color(pal.text_primary),
+                        )
+                        .fill(pal.bg_input)
+                        .stroke(egui::Stroke::new(1.0, pal.border))
+                        .corner_radius(6.0)
+                        .min_size(egui::vec2(220.0, 24.0)),
+                    );
 
-                ui.add_space(8.0);
-                // System prompt button with preview
-                let sys_prompt = self.active_conversation().map(|c| c.system_prompt.clone()).unwrap_or_default();
-                let has_sys_prompt = !sys_prompt.is_empty();
-                ui.vertical(|ui| {
-                    if ui.selectable_label(self.show_system_prompt, "System Prompt").clicked() {
-                        self.show_system_prompt = !self.show_system_prompt;
-                        if self.show_system_prompt {
-                            self.system_prompt_draft = sys_prompt.clone();
+                    // Store button rect for popup positioning
+                    self.model_picker_btn_rect = Some(btn_resp.rect);
+
+                    if btn_resp.clicked() {
+                        self.show_model_picker = !self.show_model_picker;
+                        if self.show_model_picker {
+                            self.model_filter.clear();
+                            self.model_picker_hover_idx = Some(self.model_idx);
                         }
                     }
-                    // Show preview of system prompt if set
-                    if has_sys_prompt && !self.show_system_prompt {
-                        let preview: String = sys_prompt.chars().take(30).collect();
-                        let preview = if sys_prompt.len() > 30 { format!("{}...", preview) } else { preview };
-                        ui.colored_label(pal.text_muted, egui::RichText::new(preview).size(10.0));
+
+                    ui.add_space(8.0);
+                    ui.colored_label(pal.text_secondary, "Region");
+                    ui.add_space(2.0);
+                    if has_msgs {
+                        ui.colored_label(pal.text_muted, REGIONS[self.region_idx]);
+                    } else {
+                        egui::ComboBox::from_id_salt("region_picker")
+                            .selected_text(REGIONS[self.region_idx])
+                            .show_ui(ui, |ui| {
+                                for (i, region) in REGIONS.iter().enumerate() {
+                                    ui.selectable_value(&mut self.region_idx, i, *region);
+                                }
+                            });
+                    }
+
+                    ui.add_space(8.0);
+                    // System prompt button with preview
+                    let sys_prompt = self
+                        .active_conversation()
+                        .map(|c| c.system_prompt.clone())
+                        .unwrap_or_default();
+                    let has_sys_prompt = !sys_prompt.is_empty();
+                    ui.vertical(|ui| {
+                        if ui
+                            .selectable_label(self.show_system_prompt, "System Prompt")
+                            .clicked()
+                        {
+                            self.show_system_prompt = !self.show_system_prompt;
+                            if self.show_system_prompt {
+                                self.system_prompt_draft = sys_prompt.clone();
+                            }
+                        }
+                        // Show preview of system prompt if set
+                        if has_sys_prompt && !self.show_system_prompt {
+                            let preview: String = sys_prompt.chars().take(30).collect();
+                            let preview = if sys_prompt.len() > 30 {
+                                format!("{}...", preview)
+                            } else {
+                                preview
+                            };
+                            ui.colored_label(
+                                pal.text_muted,
+                                egui::RichText::new(preview).size(10.0),
+                            );
+                        }
+                    });
+
+                    // Compact button
+                    if has_msgs && !self.is_streaming && !self.is_compacting {
+                        ui.add_space(4.0);
+                        if ui.small_button("Compact").clicked() {
+                            let ctx = ui.ctx().clone();
+                            self.compact_context(&ctx);
+                        }
+                    }
+
+                    if self.conv_usage.total_tokens > 0 {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.colored_label(
+                                pal.text_muted,
+                                egui::RichText::new(format!(
+                                    "{}in / {}out",
+                                    self.conv_usage.input_tokens, self.conv_usage.output_tokens
+                                ))
+                                .size(11.0),
+                            );
+                        });
                     }
                 });
-
-                // Compact button
-                if has_msgs && !self.is_streaming && !self.is_compacting {
-                    ui.add_space(4.0);
-                    if ui.small_button("Compact").clicked() {
-                        let ctx = ui.ctx().clone();
-                        self.compact_context(&ctx);
-                    }
-                }
-
-                if self.conv_usage.total_tokens > 0 {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.colored_label(pal.text_muted, egui::RichText::new(
-                            format!("{}in / {}out", self.conv_usage.input_tokens, self.conv_usage.output_tokens)
-                        ).size(11.0));
-                    });
-                }
             });
-        });
 
         let model_id = MODELS[self.model_idx].id.to_string();
         let region = REGIONS[self.region_idx].to_string();
         if let Some(conv) = self.active_conversation_mut() {
-            if conv.model_id != model_id || conv.region != region { conv.model_id = model_id; conv.region = region; }
+            if conv.model_id != model_id || conv.region != region {
+                conv.model_id = model_id;
+                conv.region = region;
+            }
         }
-        if !self.ephemeral { if let Some(conv) = self.active_conversation() { let _ = self.db.upsert_conversation(conv); } }
+        if !self.ephemeral {
+            if let Some(conv) = self.active_conversation() {
+                let _ = self.db.upsert_conversation(conv);
+            }
+        }
 
         if self.show_system_prompt {
-            egui::Frame::new().fill(pal.bg_topbar).inner_margin(egui::Margin::symmetric(12, 4)).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.add_sized(egui::vec2(ui.available_width() - 70.0, 50.0),
-                        egui::TextEdit::multiline(&mut self.system_prompt_draft).hint_text("Enter system prompt..."));
-                    let current = self.active_conversation().map(|c| c.system_prompt.clone()).unwrap_or_default();
-                    let changed = self.system_prompt_draft != current;
-                    if ui.add_enabled(changed, egui::Button::new(
-                        egui::RichText::new("Set").color(if changed { egui::Color32::WHITE } else { pal.text_muted })
-                    ).fill(if changed { pal.accent } else { pal.bg_input }).corner_radius(6.0).min_size(egui::vec2(50.0, 28.0))).clicked() {
-                        let draft = self.system_prompt_draft.clone();
-                        if let Some(conv) = self.active_conversation_mut() { conv.system_prompt = draft; }
-                        if !self.ephemeral { if let Some(conv) = self.active_conversation() { let _ = self.db.upsert_conversation(conv); } }
-                        self.show_system_prompt = false; // Close after setting
-                    }
+            egui::Frame::new()
+                .fill(pal.bg_topbar)
+                .inner_margin(egui::Margin::symmetric(12, 4))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add_sized(
+                            egui::vec2(ui.available_width() - 70.0, 50.0),
+                            egui::TextEdit::multiline(&mut self.system_prompt_draft)
+                                .hint_text("Enter system prompt..."),
+                        );
+                        let current = self
+                            .active_conversation()
+                            .map(|c| c.system_prompt.clone())
+                            .unwrap_or_default();
+                        let changed = self.system_prompt_draft != current;
+                        if ui
+                            .add_enabled(
+                                changed,
+                                egui::Button::new(egui::RichText::new("Set").color(if changed {
+                                    egui::Color32::WHITE
+                                } else {
+                                    pal.text_muted
+                                }))
+                                .fill(if changed { pal.accent } else { pal.bg_input })
+                                .corner_radius(6.0)
+                                .min_size(egui::vec2(50.0, 28.0)),
+                            )
+                            .clicked()
+                        {
+                            let draft = self.system_prompt_draft.clone();
+                            if let Some(conv) = self.active_conversation_mut() {
+                                conv.system_prompt = draft;
+                            }
+                            if !self.ephemeral {
+                                if let Some(conv) = self.active_conversation() {
+                                    let _ = self.db.upsert_conversation(conv);
+                                }
+                            }
+                            self.show_system_prompt = false; // Close after setting
+                        }
+                    });
                 });
-            });
         }
     }
 
@@ -1090,64 +2202,125 @@ impl ChatApp {
             Role::Assistant => ("Assistant", pal.role_assistant, pal.bg_assist_msg),
         };
         let empty = self.messages[idx].content.is_empty();
-        let copy_text = if role == Role::Assistant && !empty { Some(self.messages[idx].content.clone()) } else { None };
+        let copy_text = if role == Role::Assistant && !empty {
+            Some(self.messages[idx].content.clone())
+        } else {
+            None
+        };
 
-        egui::Frame::new().fill(bg).corner_radius(10.0).inner_margin(egui::Margin::symmetric(16, 12)).outer_margin(egui::Margin::symmetric(0, 3)).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
-                ui.colored_label(rc, egui::RichText::new(rl).size(12.5).strong());
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if let Some(ref t) = copy_text {
-                        if ui.add(egui::Button::new(egui::RichText::new("Copy").size(11.0).color(pal.text_muted)).fill(egui::Color32::TRANSPARENT).corner_radius(4.0)).clicked() { self.copy_to_clipboard(t); }
-                    }
-                    if is_streaming { ui.spinner(); }
+        egui::Frame::new()
+            .fill(bg)
+            .corner_radius(10.0)
+            .inner_margin(egui::Margin::symmetric(16, 12))
+            .outer_margin(egui::Margin::symmetric(0, 3))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.colored_label(rc, egui::RichText::new(rl).size(12.5).strong());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if let Some(ref t) = copy_text {
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        egui::RichText::new("Copy")
+                                            .size(11.0)
+                                            .color(pal.text_muted),
+                                    )
+                                    .fill(egui::Color32::TRANSPARENT)
+                                    .corner_radius(4.0),
+                                )
+                                .clicked()
+                            {
+                                self.copy_to_clipboard(t);
+                            }
+                        }
+                        if is_streaming {
+                            ui.spinner();
+                        }
+                    });
                 });
-            });
-            ui.add_space(6.0);
-            if empty && is_streaming { ui.colored_label(pal.text_muted, "..."); }
-            else if !empty {
-                let content = self.messages[idx].content.clone();
-                if is_streaming { CommonMarkViewer::new().show(ui, &mut self.streaming_md_cache, &content); }
-                else {
-                    let mid = self.messages[idx].id.clone();
-                    let v = self.messages[idx].version;
-                    let e = self.md_caches.entry(mid).or_insert_with(|| (v, CommonMarkCache::default()));
-                    if e.0 != v { *e = (v, CommonMarkCache::default()); }
-                    CommonMarkViewer::new().show(ui, &mut e.1, &content);
+                ui.add_space(6.0);
+                if empty && is_streaming {
+                    ui.colored_label(pal.text_muted, "...");
+                } else if !empty {
+                    let content = self.messages[idx].content.clone();
+                    if is_streaming {
+                        CommonMarkViewer::new().show(ui, &mut self.streaming_md_cache, &content);
+                    } else {
+                        let mid = self.messages[idx].id.clone();
+                        let v = self.messages[idx].version;
+                        let e = self
+                            .md_caches
+                            .entry(mid)
+                            .or_insert_with(|| (v, CommonMarkCache::default()));
+                        if e.0 != v {
+                            *e = (v, CommonMarkCache::default());
+                        }
+                        CommonMarkViewer::new().show(ui, &mut e.1, &content);
+                    }
                 }
-            }
-        });
+            });
     }
 
     fn render_input(&mut self, ui: &mut egui::Ui) {
         let pal = self.pal.clone();
+        let side_pad = (ui.available_width() * 0.04).clamp(12.0, 40.0);
 
-        egui::Frame::new().fill(egui::Color32::TRANSPARENT).inner_margin(egui::Margin::symmetric(16, 10)).show(ui, |ui| {
-            egui::Frame::new().fill(pal.bg_input).corner_radius(12.0).stroke(egui::Stroke::new(1.0, pal.border)).inner_margin(egui::Margin::symmetric(12, 8)).show(ui, |ui| {
-                ui.horizontal_top(|ui| {
-                    let rows = (self.input.chars().filter(|c| *c == '\n').count() + 1).clamp(1, 8);
-                    let resp = ui.add_sized(egui::vec2(ui.available_width() - 60.0, 0.0),
-                        egui::TextEdit::multiline(&mut self.input).hint_text(egui::RichText::new("Message...").color(pal.text_muted))
-                            .desired_rows(rows).lock_focus(true).text_color(pal.text_primary));
-                    
-                    // Enter sends, Shift+Enter for newline
-                    let enter_pressed = resp.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                    let shift_held = ui.input(|i| i.modifiers.shift);
-                    let should_send = enter_pressed && !shift_held;
-                    
-                    // Strip trailing newline that egui adds on Enter
-                    if should_send && self.input.ends_with('\n') {
-                        self.input.pop();
-                    }
-                    
-                    let can = !self.is_streaming && !self.is_compacting && !self.input.trim().is_empty();
-                    let bc = if can { pal.accent } else { pal.accent_dim };
-                    let text_color = if can { egui::Color32::WHITE } else { pal.text_muted };
-                    let clicked = ui.add(egui::Button::new(egui::RichText::new("Send").color(text_color).size(13.0)).fill(bc).corner_radius(8.0).min_size(egui::vec2(52.0, 30.0))).clicked();
-                    if (should_send || clicked) && can { let ctx = ui.ctx().clone(); self.send_message(&ctx); }
-                });
+        egui::Frame::new()
+            .fill(pal.bg_base)
+            .inner_margin(egui::Margin { left: side_pad as i8, right: side_pad as i8, top: 8, bottom: 10 })
+            .show(ui, |ui| {
+                egui::Frame::new()
+                    .fill(pal.bg_input)
+                    .corner_radius(12.0)
+                    .stroke(egui::Stroke::new(1.0, pal.border_strong))
+                    .inner_margin(egui::Margin::symmetric(14, 10))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            let rows =
+                                (self.input.chars().filter(|c| *c == '\n').count() + 1).clamp(1, 8);
+
+                            let _resp = ui.add_sized(
+                                egui::vec2(ui.available_width() - 60.0, 0.0),
+                                egui::TextEdit::multiline(&mut self.input)
+                                    .hint_text(
+                                        egui::RichText::new("Message...").color(pal.text_muted),
+                                    )
+                                    .desired_rows(rows)
+                                    .text_color(pal.text_primary),
+                            );
+
+                            ui.add_space(6.0);
+
+                            let can = !self.is_streaming
+                                && !self.is_compacting
+                                && !self.input.trim().is_empty();
+
+                            let bc = if can { pal.accent } else { pal.bg_base };
+                            let text_color = if can {
+                                egui::Color32::WHITE
+                            } else {
+                                pal.text_muted
+                            };
+
+                            let clicked = ui
+                                .add(
+                                    egui::Button::new(
+                                        egui::RichText::new("Send").color(text_color).size(13.0),
+                                    )
+                                    .fill(bc)
+                                    .corner_radius(8.0)
+                                    .min_size(egui::vec2(52.0, 30.0)),
+                                )
+                                .clicked();
+
+                            if clicked && can {
+                                let ctx = ui.ctx().clone();
+                                self.send_message(&ctx);
+                            }
+                        });
+                    });
             });
-        });
     }
 }
 
@@ -1155,8 +2328,10 @@ impl ChatApp {
 
 fn apply_visuals(ctx: &egui::Context, theme: egui::Theme, pal: &Palette) {
     let mut v = theme.default_visuals();
-    v.panel_fill = pal.bg_base; v.window_fill = pal.bg_base;
-    v.extreme_bg_color = pal.bg_input; v.faint_bg_color = pal.bg_sidebar;
+    v.panel_fill = pal.bg_base;
+    v.window_fill = pal.bg_base;
+    v.extreme_bg_color = pal.bg_input;
+    v.faint_bg_color = pal.bg_sidebar;
     v.widgets.noninteractive.bg_fill = pal.bg_input;
     v.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, pal.text_primary);
     v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, pal.border);
@@ -1177,20 +2352,58 @@ fn apply_visuals(ctx: &egui::Context, theme: egui::Theme, pal: &Palette) {
     ctx.set_global_style(s);
 }
 
+/// Load macOS San Francisco system font, falling back to egui defaults.
+fn load_system_font(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    // SF NS = San Francisco (system UI font)
+    if let Ok(data) = std::fs::read("/System/Library/Fonts/SFNS.ttf") {
+        fonts.font_data.insert(
+            "sf_ns".to_owned(),
+            std::sync::Arc::new(egui::FontData::from_owned(data)),
+        );
+        if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
+            family.insert(0, "sf_ns".to_owned());
+        }
+    }
+
+    // SF NS Mono for code blocks
+    if let Ok(data) = std::fs::read("/System/Library/Fonts/SFNSMono.ttf") {
+        fonts.font_data.insert(
+            "sf_mono".to_owned(),
+            std::sync::Arc::new(egui::FontData::from_owned(data)),
+        );
+        if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Monospace) {
+            family.insert(0, "sf_mono".to_owned());
+        }
+    }
+
+    ctx.set_fonts(fonts);
+}
+
 // ── eframe::App ─────────────────────────────────────────────────────────
 
 impl eframe::App for ChatApp {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         let c = self.pal.bg_base;
-        [c.r() as f32 / 255.0, c.g() as f32 / 255.0, c.b() as f32 / 255.0, 1.0]
+        [
+            c.r() as f32 / 255.0,
+            c.g() as f32 / 255.0,
+            c.b() as f32 / 255.0,
+            1.0,
+        ]
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.check_theme(ui.ctx());
+        self.tick_ephemeral_lifecycle(ui.ctx());
         self.poll_compact();
 
         // Double-tap Escape to interrupt streaming
-        if ui.input(|i| i.key_pressed(egui::Key::Escape)) && !self.show_search && !self.show_model_picker {
+        if ui.input(|i| i.key_pressed(egui::Key::Escape))
+            && !self.show_search
+            && !self.show_model_picker
+        {
             let now = ui.input(|i| i.time);
             if (self.is_streaming || self.is_compacting) && (now - self.last_escape_time) < 0.4 {
                 // Second tap within 400ms -- cancel
@@ -1222,23 +2435,39 @@ impl eframe::App for ChatApp {
         // Cmd+K shortcut for search
         if ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::K)) {
             self.show_search = !self.show_search;
-            if self.show_search { self.search_just_opened = true; self.search_query.clear(); self.search_results.clear(); }
+            if self.show_search {
+                self.search_just_opened = true;
+                self.search_query.clear();
+                self.search_results.clear();
+                self.search_selected_idx = 0;
+                self.search_hover_lock = None;
+            }
         }
 
         match &self.screen {
-            Screen::Credentials(ref form) => { 
+            Screen::Credentials(ref form) => {
                 let is_settings = form.is_settings;
-                self.render_credentials_modal(ui, is_settings); 
+                self.render_credentials_modal(ui, is_settings);
             }
             Screen::Chat => {
                 self.poll_stream();
-                egui::Panel::left("sidebar").default_size(240.0).min_size(180.0)
-                    .show_inside(ui, |ui| { self.render_sidebar(ui); });
-                egui::CentralPanel::default().show_inside(ui, |ui| { self.render_chat_pane(ui); });
+                egui::Panel::left("sidebar")
+                    .default_size(240.0)
+                    .min_size(180.0)
+                    .show_inside(ui, |ui| {
+                        self.render_sidebar(ui);
+                    });
+                egui::CentralPanel::default().show_inside(ui, |ui| {
+                    self.render_chat_pane(ui);
+                });
             }
         }
 
-        if self.show_search { self.render_search_modal(ui); }
-        if self.show_model_picker { self.render_model_picker(ui); }
+        if self.show_search {
+            self.render_search_modal(ui);
+        }
+        if self.show_model_picker {
+            self.render_model_picker(ui);
+        }
     }
 }
