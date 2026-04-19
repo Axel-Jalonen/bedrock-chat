@@ -897,7 +897,17 @@ impl ChatApp {
                     let bc = if can { pal.accent } else { pal.accent_dim };
                     let clicked = ui.add(egui::Button::new(egui::RichText::new("Send").color(if can { pal.bg_base } else { pal.text_muted }).size(13.0)).fill(bc).corner_radius(8.0).min_size(egui::vec2(52.0, 30.0))).clicked();
                     if (ce || clicked) && can { let ctx = ui.ctx().clone(); self.send_message(&ctx); }
-                    if !self.is_streaming { resp.request_focus(); }
+                    // Only grab focus if nothing else has it.
+                    // This prevents stealing from search, system prompt, model filter, etc.
+                    if !self.is_streaming {
+                        let dominated = self.show_search || self.show_system_prompt;
+                        let someone_else_focused = ui.ctx().memory(|m| {
+                            m.focused().is_some_and(|id| id != resp.id)
+                        });
+                        if !dominated && !someone_else_focused {
+                            resp.request_focus();
+                        }
+                    }
                 });
             });
         });
