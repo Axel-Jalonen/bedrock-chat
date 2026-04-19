@@ -1,0 +1,19 @@
+[package]
+name = "bedrock-chat"
+version = "0.1.0"
+edition = "2021"
+description = "Minimal native desktop chat app for AWS Bedrock"
+
+[dependencies]
+eframe = "0.34.1"
+egui_commonmark = "0.23.0"
+aws-sdk-bedrockruntime = "1.129.0"
+aws-config = { version = "1.8.15", features = ["behavior-version-latest"] }
+tokio = { version = "1", features = ["full"] }
+rusqlite = { version = "0.39.0", features = ["bundled"] }
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+arboard = "3"
