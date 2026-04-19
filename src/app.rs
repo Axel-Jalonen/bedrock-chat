@@ -229,6 +229,8 @@ pub struct ChatApp {
     is_streaming: bool,
     last_error: Option<String>,
     scroll_to_bottom: bool,
+    /// True when the user has scrolled up during streaming — suppresses auto-scroll
+    user_scrolled_up: bool,
     model_idx: usize,
     region_idx: usize,
     show_system_prompt: bool,
@@ -248,9 +250,14 @@ pub struct ChatApp {
     show_search: bool,
     search_query: String,
     search_results: Vec<(String, String, String)>,
+    /// Whether search modal just opened (for one-shot focus)
+    search_just_opened: bool,
 
     is_compacting: bool,
     compact_rx: Option<mpsc::UnboundedReceiver<StreamToken>>,
+
+    /// Timestamp of last Escape press for double-tap detection
+    last_escape_time: f64,
 }
 
 impl ChatApp {
@@ -280,12 +287,14 @@ impl ChatApp {
             rt, db, screen, conversations, active_id: None, messages: Vec::new(),
             md_caches: HashMap::new(), streaming_md_cache: CommonMarkCache::default(),
             input: String::new(), stream_rx: None, is_streaming: false, last_error: None,
-            scroll_to_bottom: false, model_idx: 0, region_idx: saved_region,
+            scroll_to_bottom: false, user_scrolled_up: false, model_idx: 0, region_idx: saved_region,
             show_system_prompt: false, clipboard, conv_usage: TokenUsage::default(),
             last_usage: None, current_theme: theme, pal, particles: Particles::new(60),
             last_frame_time: None, model_filter: String::new(), ephemeral: false,
             show_search: false, search_query: String::new(), search_results: Vec::new(),
+            search_just_opened: false,
             is_compacting: false, compact_rx: None,
+            last_escape_time: 0.0,
         }
     }
 
@@ -393,6 +402,7 @@ impl ChatApp {
         let rx = bedrock::spawn_stream(&self.rt, ctx.clone(), model_id, region, system_prompt, history);
         self.stream_rx = Some(rx);
         self.is_streaming = true;
+        self.user_scrolled_up = false;
         self.scroll_to_bottom = true;
     }
 
@@ -401,7 +411,10 @@ impl ChatApp {
         loop {
             match rx.try_recv() {
                 Ok(StreamToken::Delta(text)) => {
-                    if let Some(msg) = self.messages.last_mut() { msg.append_token(&text); self.scroll_to_bottom = true; }
+                    if let Some(msg) = self.messages.last_mut() {
+                        msg.append_token(&text);
+                        if !self.user_scrolled_up { self.scroll_to_bottom = true; }
+                    }
                 }
                 Ok(StreamToken::Done(usage)) => {
                     info!("stream completed");
@@ -423,6 +436,7 @@ impl ChatApp {
     fn finish_stream(&mut self) {
         self.is_streaming = false;
         self.stream_rx = None;
+        self.user_scrolled_up = false;
         if !self.ephemeral {
             if let Some(msg) = self.messages.last() {
                 if msg.role == Role::Assistant { let _ = self.db.update_message_content(&msg.id, &msg.content); }
@@ -517,7 +531,11 @@ impl ChatApp {
                                     self.db.search(&self.search_query).unwrap_or_default()
                                 } else { Vec::new() };
                             }
-                            resp.request_focus();
+                            // Only grab focus once when the modal first opens
+                            if self.search_just_opened {
+                                resp.request_focus();
+                                self.search_just_opened = false;
+                            }
                             ui.add_space(8.0);
                             let mut to_open: Option<String> = None;
                             egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
@@ -627,7 +645,7 @@ impl ChatApp {
                 // Search button
                 if ui.add(egui::Button::new(egui::RichText::new("\u{1F50D}").size(13.0).color(pal.text_muted))
                     .fill(egui::Color32::TRANSPARENT).corner_radius(6.0).min_size(egui::vec2(28.0, 28.0))).clicked() {
-                    self.show_search = true; self.search_query.clear(); self.search_results.clear();
+                    self.show_search = true; self.search_just_opened = true; self.search_query.clear(); self.search_results.clear();
                 }
             });
         });
@@ -786,23 +804,43 @@ impl ChatApp {
     }
 
     fn render_messages(&mut self, ui: &mut egui::Ui) {
-        egui::ScrollArea::vertical().auto_shrink([false, false]).stick_to_bottom(true).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            let side_pad = (ui.available_width() * 0.04).clamp(12.0, 40.0);
-            ui.add_space(8.0);
-            let n = self.messages.len();
-            for i in 0..n {
-                let streaming = i == n - 1 && self.is_streaming;
-                ui.horizontal(|ui| {
-                    ui.add_space(side_pad);
-                    ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                        ui.set_width(ui.available_width() - side_pad);
-                        self.render_single_message(ui, i, streaming);
+        let output = egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .stick_to_bottom(!self.user_scrolled_up)
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                let side_pad = (ui.available_width() * 0.04).clamp(12.0, 40.0);
+                ui.add_space(8.0);
+                let n = self.messages.len();
+                for i in 0..n {
+                    let streaming = i == n - 1 && self.is_streaming;
+                    ui.horizontal(|ui| {
+                        ui.add_space(side_pad);
+                        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+                            ui.set_width(ui.available_width() - side_pad);
+                            self.render_single_message(ui, i, streaming);
+                        });
                     });
-                });
+                }
+                if self.scroll_to_bottom {
+                    ui.scroll_to_cursor(Some(egui::Align::BOTTOM));
+                    self.scroll_to_bottom = false;
+                }
+            });
+
+        // Detect user scrolling up during streaming
+        if self.is_streaming {
+            let max_offset = (output.content_size.y - output.inner_rect.height()).max(0.0);
+            let current_offset = output.state.offset.y;
+            let at_bottom = max_offset < 1.0 || (max_offset - current_offset) < 20.0;
+
+            if !at_bottom {
+                self.user_scrolled_up = true;
+            } else if self.user_scrolled_up {
+                // User scrolled back to bottom -- re-enable auto-scroll
+                self.user_scrolled_up = false;
             }
-            if self.scroll_to_bottom { ui.scroll_to_cursor(Some(egui::Align::BOTTOM)); self.scroll_to_bottom = false; }
-        });
+        }
     }
 
     fn render_single_message(&mut self, ui: &mut egui::Ui, idx: usize, is_streaming: bool) {
@@ -904,10 +942,40 @@ impl eframe::App for ChatApp {
         self.check_theme(ui.ctx());
         self.poll_compact();
 
+        // Double-tap Escape to interrupt streaming
+        if ui.input(|i| i.key_pressed(egui::Key::Escape)) && !self.show_search {
+            let now = ui.input(|i| i.time);
+            if (self.is_streaming || self.is_compacting) && (now - self.last_escape_time) < 0.4 {
+                // Second tap within 400ms -- cancel
+                if self.is_streaming {
+                    self.stream_rx = None;
+                    self.is_streaming = false;
+                    self.user_scrolled_up = false;
+                    // Persist whatever we have so far
+                    if !self.ephemeral {
+                        if let Some(msg) = self.messages.last() {
+                            if msg.role == Role::Assistant && !msg.content.is_empty() {
+                                let _ = self.db.update_message_content(&msg.id, &msg.content);
+                            }
+                        }
+                    }
+                    info!("stream interrupted by user");
+                }
+                if self.is_compacting {
+                    self.compact_rx = None;
+                    self.is_compacting = false;
+                    info!("compact interrupted by user");
+                }
+                self.last_escape_time = 0.0;
+            } else {
+                self.last_escape_time = now;
+            }
+        }
+
         // Cmd+K shortcut for search
         if ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::K)) {
             self.show_search = !self.show_search;
-            if self.show_search { self.search_query.clear(); self.search_results.clear(); }
+            if self.show_search { self.search_just_opened = true; self.search_query.clear(); self.search_results.clear(); }
         }
 
         match &self.screen {
