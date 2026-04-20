@@ -265,7 +265,7 @@
             <h1>Bedrock Chat</h1>
             <p class="tagline">Native macOS client for AWS Bedrock</p>
             <div class="warning">
-                <strong>Alpha.</strong> Early software — expect bugs. Not audited.
+                <strong>Alpha.</strong> Early software, expect bugs.
             </div>
         </header>
 
@@ -297,7 +297,7 @@
                 </div>
                 <div class="feature">
                     <h3>LaTeX Math</h3>
-                    <p>Inline $...$ and display $$...$$ rendering via ReX</p>
+                    <p>Inline and display math rendering via ReX</p>
                 </div>
                 <div class="feature">
                     <h3>Search</h3>
@@ -323,25 +323,24 @@
         </section>
 
         <section>
-            <h2>Pure Rust, No Compromises</h2>
+            <h2>Pure Rust</h2>
             <div class="tech-section">
                 <p>
-                    Bedrock Chat is written entirely in Rust with <a href="https://github.com/emilk/egui">egui</a> for the UI. 
-                    No Electron, no WebView, no JavaScript runtime — just native code that starts instantly and sips memory.
+                    Built with <a href="https://github.com/emilk/egui">egui</a>. 
+                    No Electron, no WebView, no JavaScript.
                 </p>
                 <p>
-                    The LaTeX math rendering is powered by <a href="https://github.com/AX-Jalonen/rex-retex-patched">a patched fork of ReX</a>, 
-                    a pure-Rust TeX layout engine. The original ReX hadn't been updated for modern Rust (broken <code>static_map</code> proc-macro), 
-                    so we replaced it with <code>LazyLock&lt;HashMap&gt;</code> and added support for missing commands that LLMs commonly output: 
-                    <code>\text</code>, <code>\operatorname</code>, <code>\boxed</code>, <code>\implies</code>, Cyrillic characters, and more.
+                    LaTeX rendering uses <a href="https://github.com/Axel-Jalonen/rex-retex-patched">a patched fork of ReX</a>, 
+                    a pure Rust TeX layout engine. The original hadn't been updated for modern Rust, 
+                    so we fixed the build and added support for commands LLMs commonly output: 
+                    <code>\text</code>, <code>\operatorname</code>, <code>\boxed</code>, Cyrillic characters, etc.
                 </p>
                 <p>
-                    Markdown parsing uses <a href="https://github.com/raphlinus/pulldown-cmark">pulldown-cmark</a>, with a custom renderer 
-                    that seamlessly interleaves styled text and math expressions on the same line — something most chat UIs can't do without 
-                    forcing line breaks around every equation.
+                    Markdown parsing uses <a href="https://github.com/raphlinus/pulldown-cmark">pulldown-cmark</a> with a custom renderer 
+                    that interleaves styled text and math on the same line.
                 </p>
                 <p>
-                    Credentials are stored in the macOS Keychain, not in plaintext config files.
+                    Credentials are stored in the macOS Keychain.
                 </p>
             </div>
         </section>
