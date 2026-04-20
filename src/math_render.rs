@@ -589,6 +589,8 @@ pub enum Block {
     /// A heading that contains inline math.
     /// `level` is 1-6 (from # to ######).
     HeadingWithMath { level: u8, segments: Vec<Segment> },
+    /// A list item that contains inline math.
+    ListItemWithMath { segments: Vec<Segment> },
     /// Plain markdown text with no inline math.
     /// Rendered via CommonMarkViewer for full markdown support.
     Markdown(String),
@@ -714,6 +716,26 @@ fn flush_paragraph(blocks: &mut Vec<Block>, para: &mut Vec<Segment>) {
                 *t = t[hash_end..].trim_start().to_string();
             }
             blocks.push(Block::HeadingWithMath { level, segments });
+            return;
+        }
+
+        // Check if this is a list item with math (- or * or 1. prefix)
+        if trimmed.starts_with("- ") || trimmed.starts_with("* ") ||
+           (trimmed.len() > 2 && trimmed.as_bytes()[0].is_ascii_digit() && trimmed.contains(". "))
+        {
+            let mut segments: Vec<Segment> = para.drain(..).collect();
+            if let Some(Segment::Text(ref mut t)) = segments.first_mut() {
+                // Strip the list marker
+                let trimmed_t = t.trim_start();
+                if trimmed_t.starts_with("- ") || trimmed_t.starts_with("* ") {
+                    let marker_end = t.find("- ").or_else(|| t.find("* ")).unwrap_or(0) + 2;
+                    *t = t[marker_end..].to_string();
+                } else if let Some(dot_pos) = trimmed_t.find(". ") {
+                    let start = t.len() - trimmed_t.len();
+                    *t = t[start + dot_pos + 2..].to_string();
+                }
+            }
+            blocks.push(Block::ListItemWithMath { segments });
             return;
         }
 

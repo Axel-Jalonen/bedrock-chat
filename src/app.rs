@@ -2306,6 +2306,22 @@ impl ChatApp {
                                         ui.add_space(4.0);
                                     }
                                 }
+                                math_render::Block::ListItemWithMath { segments } => {
+                                    ui.horizontal(|ui| {
+                                        ui.add_space(8.0);
+                                        ui.label(
+                                            egui::RichText::new("•")
+                                                .size(14.0)
+                                                .color(pal.text_primary),
+                                        );
+                                        ui.add_space(4.0);
+                                        ui.vertical(|ui| {
+                                            math_render::render_inline_paragraph(
+                                                ui, segments, 14.0, 16.0, pal.text_primary,
+                                            );
+                                        });
+                                    });
+                                }
                                 math_render::Block::Markdown(text) => {
                                     if text.trim().is_empty() {
                                         continue;
