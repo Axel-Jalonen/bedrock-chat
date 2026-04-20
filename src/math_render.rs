@@ -647,8 +647,10 @@ pub fn split_into_blocks(content: &str) -> Vec<Block> {
                 }
                 let run = &segments[run_start..i];
 
-                // Now split this run into paragraphs on \n\n boundaries.
-                // We need to break Text segments at \n\n.
+                // Now split this run into paragraphs.
+                // Split on \n\n (paragraph breaks) and also on \n when the next
+                // line starts with a list marker (- or * or digit.) to preserve
+                // list structure.
                 let mut current_para: Vec<Segment> = Vec::new();
 
                 for seg in run {
@@ -657,15 +659,54 @@ pub fn split_into_blocks(content: &str) -> Vec<Block> {
                             current_para.push(Segment::InlineMath(tex.clone()));
                         }
                         Segment::Text(text) => {
-                            // Split on \n\n
-                            let parts: Vec<&str> = text.split("\n\n").collect();
-                            for (pi, part) in parts.iter().enumerate() {
-                                if pi > 0 {
-                                    // Paragraph break - flush current_para
-                                    flush_paragraph(&mut blocks, &mut current_para);
-                                }
-                                if !part.is_empty() {
-                                    current_para.push(Segment::Text(part.to_string()));
+                            // Split intelligently on line boundaries
+                            let mut remaining = text.as_str();
+                            while !remaining.is_empty() {
+                                // Find next newline
+                                if let Some(nl_pos) = remaining.find('\n') {
+                                    let before = &remaining[..nl_pos];
+                                    let after = &remaining[nl_pos + 1..];
+                                    
+                                    // Check if this is a paragraph break (\n\n) or list item boundary
+                                    let is_para_break = after.starts_with('\n');
+                                    let next_line_is_list = {
+                                        let trimmed = after.trim_start();
+                                        trimmed.starts_with("- ") 
+                                            || trimmed.starts_with("* ")
+                                            || (trimmed.len() > 2 
+                                                && trimmed.as_bytes().first().map(|b| b.is_ascii_digit()).unwrap_or(false)
+                                                && trimmed.contains(". "))
+                                    };
+                                    let current_is_list = {
+                                        let trimmed = before.trim_start();
+                                        trimmed.starts_with("- ") 
+                                            || trimmed.starts_with("* ")
+                                            || (trimmed.len() > 2 
+                                                && trimmed.as_bytes().first().map(|b| b.is_ascii_digit()).unwrap_or(false)
+                                                && trimmed.contains(". "))
+                                    };
+                                    
+                                    if !before.is_empty() {
+                                        current_para.push(Segment::Text(before.to_string()));
+                                    }
+                                    
+                                    if is_para_break || next_line_is_list || current_is_list {
+                                        flush_paragraph(&mut blocks, &mut current_para);
+                                        // Skip extra newline for \n\n case
+                                        remaining = after.trim_start_matches('\n');
+                                    } else {
+                                        // Single newline within a paragraph - keep as space
+                                        if !current_para.is_empty() {
+                                            current_para.push(Segment::Text(" ".to_string()));
+                                        }
+                                        remaining = after;
+                                    }
+                                } else {
+                                    // No more newlines
+                                    if !remaining.is_empty() {
+                                        current_para.push(Segment::Text(remaining.to_string()));
+                                    }
+                                    break;
                                 }
                             }
                         }
