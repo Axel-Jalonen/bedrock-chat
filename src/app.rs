@@ -279,7 +279,9 @@ impl ChatApp {
         };
 
         let conversations = db.list_conversations().unwrap_or_default();
-        let saved_key = db.get_config("api_key").ok().flatten();
+        // Try keychain first, fall back to plaintext DB for migration
+        let saved_key = crate::keychain::get_api_key()
+            .or_else(|| db.get_config("api_key").ok().flatten());
         let saved_region = db
             .get_config("region")
             .ok()
@@ -289,6 +291,11 @@ impl ChatApp {
 
         let screen = if let Some(ref key) = saved_key {
             if !key.is_empty() {
+                // Migrate from plaintext DB to keychain if needed
+                if crate::keychain::get_api_key().is_none() {
+                    let _ = crate::keychain::set_api_key(key);
+                    let _ = db.set_config("api_key", ""); // clear plaintext
+                }
                 std::env::set_var("AWS_BEARER_TOKEN_BEDROCK", key);
                 Screen::Chat
             } else {
@@ -1227,7 +1234,8 @@ impl ChatApp {
                             };
                             let key = form.api_key.trim().to_string();
                             std::env::set_var("AWS_BEARER_TOKEN_BEDROCK", &key);
-                            let _ = self.db.set_config("api_key", &key);
+                            let _ = crate::keychain::set_api_key(&key);
+                            let _ = self.db.set_config("api_key", ""); // no plaintext
                             let _ = self.db.set_config("region", REGIONS[form.region_idx]);
                             self.region_idx = form.region_idx;
                             self.screen = Screen::Chat;
@@ -2065,13 +2073,23 @@ impl ChatApp {
 
                     if self.conv_usage.total_tokens > 0 {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.colored_label(
-                                pal.text_muted,
-                                egui::RichText::new(format!(
+                            let usage_text = if let Some(last) = self.last_usage {
+                                format!(
+                                    "{}in / {}out (last: {}in / {}out)",
+                                    self.conv_usage.input_tokens,
+                                    self.conv_usage.output_tokens,
+                                    last.input_tokens,
+                                    last.output_tokens
+                                )
+                            } else {
+                                format!(
                                     "{}in / {}out",
                                     self.conv_usage.input_tokens, self.conv_usage.output_tokens
-                                ))
-                                .size(11.0),
+                                )
+                            };
+                            ui.colored_label(
+                                pal.text_muted,
+                                egui::RichText::new(usage_text).size(11.0),
                             );
                         });
                     }
