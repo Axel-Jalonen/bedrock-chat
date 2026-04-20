@@ -2276,16 +2276,30 @@ impl ChatApp {
                                     ui.add_space(4.0);
                                 }
                                 math_render::Block::InlineMathParagraph(segments) => {
-                                    // Render text + inline math in a single flow
+                                    // Render text + inline math in a single flow.
+                                    // Break text into individual words so egui's
+                                    // horizontal_wrapped can reflow at word boundaries.
                                     ui.horizontal_wrapped(|ui| {
                                         ui.spacing_mut().item_spacing.x = 0.0;
                                         for seg in segments {
                                             match seg {
                                                 math_render::Segment::Text(text) => {
                                                     let text = text.replace('\n', " ");
-                                                    if !text.is_empty() {
+                                                    // Split into words, keeping spaces attached
+                                                    // to the preceding word for proper spacing.
+                                                    for word in text.split(' ') {
+                                                        if word.is_empty() {
+                                                            // Consecutive spaces - add a space widget
+                                                            ui.label(
+                                                                egui::RichText::new(" ")
+                                                                    .size(14.0),
+                                                            );
+                                                            continue;
+                                                        }
+                                                        // Add space before word (except at start of line)
+                                                        let with_space = format!("{} ", word);
                                                         ui.label(
-                                                            egui::RichText::new(&text)
+                                                            egui::RichText::new(with_space)
                                                                 .size(14.0)
                                                                 .color(pal.text_primary),
                                                         );
