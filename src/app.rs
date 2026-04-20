@@ -2295,29 +2295,49 @@ impl ChatApp {
                     .stroke(egui::Stroke::new(1.0, pal.border_strong))
                     .inner_margin(egui::Margin::symmetric(12, 8))
                     .show(ui, |ui| {
-                        let rows =
-                            (self.input.chars().filter(|c| *c == '\n').count() + 1).clamp(1, 6);
+                        let line_count = self.input.chars().filter(|c| *c == '\n').count() + 1;
+                        let max_visible_rows = 12;
+                        let row_height = 16.0; // approximate height per row
+                        let needs_scroll = line_count > max_visible_rows;
+                        let text_height = if needs_scroll {
+                            max_visible_rows as f32 * row_height
+                        } else {
+                            line_count.max(1) as f32 * row_height
+                        };
                         let avail_w = ui.available_width();
 
                         ui.horizontal(|ui| {
-                            let resp = ui.add_sized(
-                                egui::vec2(avail_w - 56.0, 0.0),
-                                egui::TextEdit::multiline(&mut self.input)
-                                    .hint_text(
-                                        egui::RichText::new("Message...").color(pal.text_muted),
-                                    )
-                                    .desired_rows(rows)
-                                    .frame(egui::Frame::NONE)
-                                    .text_color(pal.text_primary),
-                            );
+                            let input_width = avail_w - 56.0;
 
-                            // Enter sends, Shift+Enter for newline
-                            let enter_pressed = resp.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                            let shift_held = ui.input(|i| i.modifiers.shift);
-                            let should_send = enter_pressed && !shift_held;
-
-                            if should_send && self.input.ends_with('\n') {
-                                self.input.pop();
+                            if needs_scroll {
+                                egui::ScrollArea::vertical()
+                                    .max_height(text_height)
+                                    .stick_to_bottom(true)
+                                    .show(ui, |ui| {
+                                        let resp = ui.add_sized(
+                                            egui::vec2(input_width, 0.0),
+                                            egui::TextEdit::multiline(&mut self.input)
+                                                .hint_text(
+                                                    egui::RichText::new("Message...").color(pal.text_muted),
+                                                )
+                                                .desired_rows(line_count)
+                                                .frame(egui::Frame::NONE)
+                                                .text_color(pal.text_primary),
+                                        );
+                                        self.handle_input_response(ui, resp);
+                                    });
+                            } else {
+                                let resp = ui.add_sized(
+                                    egui::vec2(input_width, text_height),
+                                    egui::TextEdit::multiline(&mut self.input)
+                                        .hint_text(
+                                            egui::RichText::new("Message...").color(pal.text_muted),
+                                        )
+                                        .desired_rows(line_count)
+                                        .frame(egui::Frame::NONE)
+                                        .text_color(pal.text_primary),
+                                );
+                                self.handle_input_response(ui, resp);
                             }
 
                             let can = !self.is_streaming
@@ -2331,24 +2351,42 @@ impl ChatApp {
                                 pal.text_muted
                             };
 
-                            let clicked = ui
-                                .add(
-                                    egui::Button::new(
-                                        egui::RichText::new("Send").color(text_color).size(13.0),
-                                    )
-                                    .fill(bc)
-                                    .corner_radius(8.0)
-                                    .min_size(egui::vec2(48.0, 28.0)),
+                            let clicked = ui.add(
+                                egui::Button::new(
+                                    egui::RichText::new("Send").color(text_color).size(13.0),
                                 )
-                                .clicked();
+                                .fill(bc)
+                                .corner_radius(8.0)
+                                .min_size(egui::vec2(48.0, 28.0)),
+                            ).clicked();
 
-                            if (clicked || should_send) && can {
+                            if clicked && can {
                                 let ctx = ui.ctx().clone();
                                 self.send_message(&ctx);
                             }
                         });
                     });
             });
+    }
+
+    /// Handle enter-to-send logic for the input text edit.
+    fn handle_input_response(&mut self, ui: &mut egui::Ui, resp: egui::Response) {
+        let enter_pressed = resp.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        let shift_held = ui.input(|i| i.modifiers.shift);
+        let should_send = enter_pressed && !shift_held;
+
+        if should_send && self.input.ends_with('\n') {
+            self.input.pop();
+        }
+
+        let can = !self.is_streaming
+            && !self.is_compacting
+            && !self.input.trim().is_empty();
+
+        if should_send && can {
+            let ctx = ui.ctx().clone();
+            self.send_message(&ctx);
+        }
     }
 }
 
