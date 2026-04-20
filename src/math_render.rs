@@ -261,8 +261,11 @@ pub fn render_math_ui(
     Some(egui::vec2(canvas_w, canvas_h))
 }
 
-/// Render a paragraph with inline math using a single LayoutJob.
-/// Text flows naturally with line-breaking; math is overlaid at the correct positions.
+/// Render a paragraph with inline math using manual word-wrapping.
+///
+/// We measure each word and math expression, place them left-to-right,
+/// and wrap to the next line when we run out of space. This gives true
+/// inline flow without fighting egui's widget layout model.
 pub fn render_inline_paragraph(
     ui: &mut egui::Ui,
     segments: &[Segment],
@@ -270,141 +273,172 @@ pub fn render_inline_paragraph(
     math_size: f32,
     color: egui::Color32,
 ) {
-    let wrap_width = ui.available_width();
-
-    // Phase 1: Build LayoutJob, recording where math placeholders go.
-    let mut job = egui::text::LayoutJob::default();
-    job.wrap.max_width = wrap_width;
-
-    let text_font = egui::FontId::proportional(text_size);
-    let text_format = egui::text::TextFormat {
-        font_id: text_font.clone(),
-        color,
-        ..Default::default()
+    let max_width = ui.available_width();
+    let line_height = text_size * 1.4; // approximate line height
+    let space_width = {
+        let galley = ui.painter().layout_no_wrap(
+            " ".to_string(),
+            egui::FontId::proportional(text_size),
+            color,
+        );
+        galley.size().x
     };
 
-    struct MathPlaceholder {
-        byte_start: usize,
-        byte_end: usize,
-        commands: Vec<DrawCmd>,
-        width: f32,
-        height: f32,
+    // Break segments into "tokens" - individual words and math expressions
+    enum Token {
+        Word(String),
+        Math { tex: String, commands: Vec<DrawCmd>, width: f32, height: f32 },
+        MathFallback(String),
+        Space,
     }
-    let mut math_placeholders: Vec<MathPlaceholder> = Vec::new();
+
+    let mut tokens: Vec<Token> = Vec::new();
 
     for seg in segments {
         match seg {
             Segment::Text(text) => {
                 let text = text.replace('\n', " ");
-                job.append(&text, 0.0, text_format.clone());
+                for (i, word) in text.split(' ').enumerate() {
+                    if i > 0 {
+                        tokens.push(Token::Space);
+                    }
+                    if !word.is_empty() {
+                        tokens.push(Token::Word(word.to_string()));
+                    }
+                }
             }
             Segment::InlineMath(tex) => {
                 if let Some((commands, w, h)) = layout_math(tex, math_size, false) {
-                    // Insert placeholder spaces that approximate the math width.
-                    // We use OBJECT REPLACEMENT CHAR as a visible-width placeholder.
-                    // Calculate how many space chars we need to fill the width.
-                    let byte_start = job.text.len();
-
-                    // Use a single special char as placeholder; we'll size it via
-                    // leading_space to reserve the correct width.
-                    // Actually, LayoutJob doesn't let us set per-char width.
-                    // Instead, use leading_space to push the next content right.
-                    // But we need the placeholder to OCCUPY space in the flow.
-                    //
-                    // Simplest approach: insert a single space char with
-                    // leading_space = math_width. The space itself is narrow,
-                    // so total reservation ≈ math_width.
-                    let placeholder = "\u{00A0}"; // non-breaking space
-                    let start = job.text.len();
-                    job.text.push_str(placeholder);
-                    let end = job.text.len();
-                    job.sections.push(egui::text::LayoutSection {
-                        leading_space: w,
-                        byte_range: start..end,
-                        format: egui::text::TextFormat {
-                            font_id: egui::FontId::proportional(text_size),
-                            color: egui::Color32::TRANSPARENT, // invisible
-                            ..Default::default()
-                        },
-                    });
-
-                    let byte_end = job.text.len();
-                    math_placeholders.push(MathPlaceholder {
-                        byte_start,
-                        byte_end,
+                    tokens.push(Token::Math {
+                        tex: tex.clone(),
                         commands,
                         width: w,
                         height: h,
                     });
                 } else {
-                    // Parse error fallback
-                    let fallback = format!("${}$", tex);
-                    job.append(&fallback, 0.0, egui::text::TextFormat {
-                        font_id: text_font.clone(),
-                        color: egui::Color32::from_rgb(150, 150, 150),
-                        ..Default::default()
-                    });
+                    tokens.push(Token::MathFallback(format!("${}$", tex)));
                 }
             }
             _ => {}
         }
     }
 
-    // Phase 2: Layout the galley
-    let galley = ui.painter().layout_job(job);
-    let galley_size = galley.size();
+    // Measure each token's width
+    struct Measured {
+        width: f32,
+        token_idx: usize,
+    }
 
-    // Phase 3: Allocate space and paint
-    let (rect, _) = ui.allocate_exact_size(galley_size, egui::Sense::hover());
+    let mut measured: Vec<f32> = Vec::with_capacity(tokens.len());
+    for token in &tokens {
+        let w = match token {
+            Token::Word(word) => {
+                let galley = ui.painter().layout_no_wrap(
+                    word.clone(),
+                    egui::FontId::proportional(text_size),
+                    color,
+                );
+                galley.size().x
+            }
+            Token::Math { width, .. } => *width,
+            Token::MathFallback(text) => {
+                let galley = ui.painter().layout_no_wrap(
+                    text.clone(),
+                    egui::FontId::proportional(text_size),
+                    color,
+                );
+                galley.size().x
+            }
+            Token::Space => space_width,
+        };
+        measured.push(w);
+    }
+
+    // Line-break: greedily place tokens, wrapping when they exceed max_width
+    struct Line {
+        tokens: Vec<usize>, // indices into tokens vec
+        width: f32,
+    }
+
+    let mut lines: Vec<Line> = vec![Line { tokens: Vec::new(), width: 0.0 }];
+
+    for (i, token) in tokens.iter().enumerate() {
+        let w = measured[i];
+        let current_line = lines.last_mut().unwrap();
+
+        // Spaces at start of line are skipped
+        if matches!(token, Token::Space) && current_line.tokens.is_empty() {
+            continue;
+        }
+
+        if current_line.width + w > max_width && !current_line.tokens.is_empty() {
+            // Wrap to next line (skip leading space)
+            if matches!(token, Token::Space) {
+                continue;
+            }
+            lines.push(Line { tokens: vec![i], width: w });
+        } else {
+            current_line.tokens.push(i);
+            current_line.width += w;
+        }
+    }
+
+    // Calculate total height
+    let total_height = lines.len() as f32 * line_height;
+
+    // Allocate space
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(max_width, total_height),
+        egui::Sense::hover(),
+    );
 
     if !ui.is_rect_visible(rect) {
         return;
     }
 
     let painter = ui.painter_at(rect);
-    let origin = rect.left_top();
 
-    // Paint the text galley
-    painter.galley(origin, galley.clone(), color);
+    // Paint each line
+    for (line_idx, line) in lines.iter().enumerate() {
+        let y = rect.top() + line_idx as f32 * line_height;
+        let baseline_y = y + text_size; // approximate baseline position
+        let mut x = rect.left();
 
-    // Phase 4: Find placeholder positions and paint math overlays
-    for placeholder in &math_placeholders {
-        // Find the position of the placeholder character in the galley
-        if let Some(pos) = find_char_position(&galley, placeholder.byte_start) {
-            let math_origin = egui::pos2(
-                origin.x + pos.x - placeholder.width,
-                origin.y + pos.y,
-            );
-            paint_math_commands(
-                &painter,
-                &placeholder.commands,
-                math_origin,
-                math_size,
-                color,
-            );
-        }
-    }
-}
-
-/// Find the position of a character at the given byte offset in the galley.
-fn find_char_position(galley: &egui::Galley, byte_offset: usize) -> Option<egui::Pos2> {
-    // Convert byte offset to char offset
-    let char_offset = galley.job.text[..byte_offset].chars().count();
-
-    let mut chars_seen = 0;
-    for row in &galley.rows {
-        for glyph in &row.glyphs {
-            if chars_seen == char_offset {
-                return Some(egui::pos2(row.pos.x + glyph.pos.x, row.pos.y));
+        for &token_idx in &line.tokens {
+            let token = &tokens[token_idx];
+            match token {
+                Token::Word(word) => {
+                    let galley = painter.layout_no_wrap(
+                        word.clone(),
+                        egui::FontId::proportional(text_size),
+                        color,
+                    );
+                    let text_y = baseline_y - galley.size().y * 0.8;
+                    painter.galley(egui::pos2(x, text_y), galley.clone(), color);
+                    x += galley.size().x;
+                }
+                Token::Math { commands, width, height, .. } => {
+                    // Center math vertically on the line
+                    let math_y = y + (line_height - height) / 2.0;
+                    paint_math_commands(&painter, commands, egui::pos2(x, math_y), math_size, color);
+                    x += width;
+                }
+                Token::MathFallback(text) => {
+                    let galley = painter.layout_no_wrap(
+                        text.clone(),
+                        egui::FontId::proportional(text_size),
+                        egui::Color32::from_rgb(150, 150, 150),
+                    );
+                    let text_y = baseline_y - galley.size().y * 0.8;
+                    painter.galley(egui::pos2(x, text_y), galley.clone(), color);
+                    x += galley.size().x;
+                }
+                Token::Space => {
+                    x += space_width;
+                }
             }
-            chars_seen += 1;
-        }
-        // Account for newline characters that don't have glyphs
-        if row.ends_with_newline {
-            chars_seen += 1;
         }
     }
-    None
 }
 
 // ── Math segment parsing ────────────────────────────────────────────────
