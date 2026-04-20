@@ -299,12 +299,6 @@ fn preprocess_latex(tex: &str) -> String {
     // Just strip it entirely since it's just a spacing adjustment
     result = result.replace("\\!", "");
     
-    // \blacksquare -> \square (ReX doesn't have blacksquare, but has square)
-    result = result.replace("\\blacksquare", "\\square");
-    
-    // \square might also not be in ReX, fall back to empty box character or strip
-    // Let's try keeping \square first - if it fails, we'll strip it too
-    
     result
 }
 
