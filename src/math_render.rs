@@ -158,18 +158,29 @@ pub fn layout_math(
     // Preprocess to handle unsupported commands
     let tex = preprocess_latex(tex);
     
-    let renderer = EguiRenderer::new(font_size as u16, display);
-    let mut commands = Vec::new();
-    match renderer.render_to(&mut commands, &tex) {
-        Ok(()) => {}
-        Err(e) => {
-            tracing::warn!("ReX parse error for {:?}: {}", tex, e);
-            return None;
+    // Catch panics from ReX (e.g. assertion failures on edge-case inputs)
+    let result = std::panic::catch_unwind(|| {
+        let renderer = EguiRenderer::new(font_size as u16, display);
+        let mut commands = Vec::new();
+        match renderer.render_to(&mut commands, &tex) {
+            Ok(()) => {
+                let (w, h) = extract_canvas_size(&mut commands);
+                Some((commands, w, h))
+            }
+            Err(e) => {
+                tracing::warn!("ReX parse error for {:?}: {}", tex, e);
+                None
+            }
+        }
+    });
+    
+    match result {
+        Ok(inner) => inner,
+        Err(_) => {
+            tracing::warn!("ReX panicked on {:?}, falling back to text", tex);
+            None
         }
     }
-
-    let (w, h) = extract_canvas_size(&mut commands);
-    Some((commands, w, h))
 }
 
 /// Preprocess LaTeX to handle commands that ReX doesn't support.
@@ -283,6 +294,16 @@ fn preprocess_latex(tex: &str) -> String {
             break;
         }
     }
+    
+    // \! (negative thin space) - causes assertion failure in ReX's fp.rs
+    // Just strip it entirely since it's just a spacing adjustment
+    result = result.replace("\\!", "");
+    
+    // \blacksquare -> \square (ReX doesn't have blacksquare, but has square)
+    result = result.replace("\\blacksquare", "\\square");
+    
+    // \square might also not be in ReX, fall back to empty box character or strip
+    // Let's try keeping \square first - if it fails, we'll strip it too
     
     result
 }
