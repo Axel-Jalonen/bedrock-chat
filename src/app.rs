@@ -279,8 +279,9 @@ impl ChatApp {
         };
 
         let conversations = db.list_conversations().unwrap_or_default();
-        // Try keychain first, fall back to plaintext DB for migration
-        let saved_key = crate::keychain::get_api_key()
+        // Try keychain first (single read), fall back to plaintext DB for migration
+        let keychain_key = crate::keychain::get_api_key();
+        let saved_key = keychain_key.clone()
             .or_else(|| db.get_config("api_key").ok().flatten());
         let saved_region = db
             .get_config("region")
@@ -291,8 +292,8 @@ impl ChatApp {
 
         let screen = if let Some(ref key) = saved_key {
             if !key.is_empty() {
-                // Migrate from plaintext DB to keychain if needed
-                if crate::keychain::get_api_key().is_none() {
+                // Migrate from plaintext DB to keychain if needed (one-time)
+                if keychain_key.is_none() {
                     let _ = crate::keychain::set_api_key(key);
                     let _ = db.set_config("api_key", ""); // clear plaintext
                 }
@@ -2279,6 +2280,7 @@ impl ChatApp {
                                             tex,
                                             math_font_size,
                                             text_color,
+                                            false,
                                         )
                                         .is_none()
                                         {
@@ -2303,6 +2305,7 @@ impl ChatApp {
                                             tex,
                                             math_font_size,
                                             text_color,
+                                            true,
                                         )
                                         .is_none()
                                         {

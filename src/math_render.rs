@@ -47,10 +47,11 @@ struct EguiRenderer {
 }
 
 impl EguiRenderer {
-    fn new(font_size: u16) -> Self {
+    fn new(font_size: u16, display: bool) -> Self {
+        let style = if display { Style::Display } else { Style::Text };
         let settings = RenderSettings::default()
             .font_size(font_size)
-            .style(Style::Display);
+            .style(style);
         Self {
             settings,
         }
@@ -148,14 +149,17 @@ impl Renderer for EguiRenderer {
 // ── Rendering into egui ─────────────────────────────────────────────────
 
 /// Render a LaTeX math string into the given egui `Ui`.
+/// `display` controls whether to use Display style (large fractions, centered limits)
+/// or Text/inline style (smaller fractions, side limits).
 /// Returns the size of the rendered math, or None on parse error.
 pub fn render_math_ui(
     ui: &mut egui::Ui,
     tex: &str,
     font_size: f32,
     color: egui::Color32,
+    display: bool,
 ) -> Option<egui::Vec2> {
-    let renderer = EguiRenderer::new(font_size as u16);
+    let renderer = EguiRenderer::new(font_size as u16, display);
     let mut commands = Vec::new();
     match renderer.render_to(&mut commands, tex) {
         Ok(()) => {}

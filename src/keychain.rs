@@ -20,10 +20,15 @@ pub fn get_api_key() -> Option<String> {
 /// Store the API key in the macOS Keychain.
 /// Overwrites any existing value.
 pub fn set_api_key(key: &str) -> Result<(), String> {
-    // Delete first to avoid "duplicate item" errors on overwrite
-    let _ = delete_generic_password(SERVICE, ACCOUNT);
-    set_generic_password(SERVICE, ACCOUNT, key.as_bytes())
-        .map_err(|e| format!("Keychain write failed: {}", e))
+    // Try to set directly first; if it already exists, delete and retry
+    match set_generic_password(SERVICE, ACCOUNT, key.as_bytes()) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            let _ = delete_generic_password(SERVICE, ACCOUNT);
+            set_generic_password(SERVICE, ACCOUNT, key.as_bytes())
+                .map_err(|e| format!("Keychain write failed: {}", e))
+        }
+    }
 }
 
 /// Delete the stored API key from the macOS Keychain.
