@@ -1381,25 +1381,100 @@ impl ChatApp {
         let pal = self.pal.clone();
         ui.painter().rect_filled(ui.max_rect(), 0.0, pal.bg_sidebar);
         ui.add_space(8.0);
+        
+        let button_height = 28.0;
+        let icon_color = pal.text_muted;
+
         ui.horizontal(|ui| {
             ui.add_space(8.0);
             ui.colored_label(
                 pal.text_primary,
                 egui::RichText::new("Chats").size(16.0).strong(),
             );
+            
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
-                // Settings button
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new("Settings").size(12.0).color(pal.text_muted),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .corner_radius(6.0),
-                    )
-                    .clicked()
-                {
+
+                // --- Search Button ---
+                let search_btn = egui::Button::new(egui::RichText::new("/").size(14.0).color(icon_color))
+                    .fill(egui::Color32::TRANSPARENT)
+                    .corner_radius(6.0)
+                    .min_size(egui::vec2(button_height, button_height));
+
+                if ui.add(search_btn).on_hover_text("Search chats (Cmd+K)").clicked() {
+                    self.show_search = true;
+                    self.search_just_opened = true;
+                    self.search_query.clear();
+                    self.search_results.clear();
+                    self.search_selected_idx = 0;
+                    self.search_hover_lock = None;
+                }
+
+                // --- Ephemeral Button ---
+                let eph_label = if self.ephemeral { "Eph" } else if self.ephemeral_id.is_some() { "eph" } else { "Eph" };
+                let eph_color = if self.ephemeral { pal.accent } else if self.ephemeral_id.is_some() { pal.accent_dim } else { icon_color };
+                let eph_fill = if self.ephemeral { pal.selected } else { egui::Color32::TRANSPARENT };
+
+                let eph_btn = egui::Button::new(egui::RichText::new(eph_label).size(11.0).color(eph_color))
+                    .fill(eph_fill)
+                    .corner_radius(6.0)
+                    .min_size(egui::vec2(button_height, button_height));
+
+                let eph_res = ui.add(eph_btn).on_hover_text(match (&self.ephemeral_id, self.ephemeral) {
+                    (Some(_), true) => "Already in ephemeral chat",
+                    (Some(_), false) => "Resume ephemeral chat",
+                    (None, _) => "New ephemeral chat",
+                });
+
+                if eph_res.clicked() {
+                    if let Some(eph_id) = self.ephemeral_id.clone() {
+                        if !self.ephemeral {
+                            self.ephemeral = true;
+                            self.select_conversation(&eph_id);
+                        } else {
+                            let now = ui.input(|i| i.time);
+                            self.pulse_active_until = Some(now + 0.6);
+                            self.burst.spawn(eph_res.rect.center(), 8);
+                        }
+                    } else {
+                        self.ephemeral = true;
+                        self.burst.spawn(eph_res.rect.center(), 20);
+                        self.new_conversation();
+                    }
+                }
+
+                // --- New Chat Button ---
+                let new_btn_ctrl = egui::Button::new(egui::RichText::new("+").size(18.0).color(pal.accent))
+                    .fill(egui::Color32::TRANSPARENT)
+                    .corner_radius(6.0)
+                    .min_size(egui::vec2(button_height, button_height));
+
+                let new_btn_res = ui.add(new_btn_ctrl).on_hover_text("New chat");
+                
+                if new_btn_res.clicked() {
+                    let active_is_empty_regular = self.active_id.is_some()
+                        && self.messages.is_empty()
+                        && !self.is_streaming
+                        && self.active_id != self.ephemeral_id;
+
+                    if active_is_empty_regular {
+                        let now = ui.input(|i| i.time);
+                        self.pulse_active_until = Some(now + 0.6);
+                        self.burst.spawn(new_btn_res.rect.center(), 8);
+                    } else {
+                        self.ephemeral = false;
+                        self.burst.spawn(new_btn_res.rect.center(), 20);
+                        self.new_conversation();
+                    }
+                }
+
+                // --- Settings Button ---
+                let settings_btn = egui::Button::new(egui::RichText::new("Settings").size(12.0).color(icon_color))
+                    .fill(egui::Color32::TRANSPARENT)
+                    .corner_radius(6.0)
+                    .min_size(egui::vec2(button_height, button_height));
+
+                if ui.add(settings_btn).clicked() {
                     self.delete_all_confirming = false;
                     self.delete_all_feedback_until = None;
                     self.screen = Screen::Credentials(CredentialForm {
@@ -1407,94 +1482,6 @@ impl ChatApp {
                         region_idx: self.region_idx,
                         is_settings: true,
                     });
-                }
-                // New chat button
-                let new_btn = ui
-                    .add(
-                        egui::Button::new(egui::RichText::new("+").size(18.0).color(pal.accent))
-                            .fill(egui::Color32::TRANSPARENT)
-                            .corner_radius(6.0)
-                            .min_size(egui::vec2(28.0, 28.0)),
-                    )
-                    .on_hover_text("New chat");
-                if new_btn.clicked() {
-                    let active_is_empty_regular = self.active_id.is_some()
-                        && self.messages.is_empty()
-                        && !self.is_streaming
-                        && self.active_id != self.ephemeral_id;
-                    if active_is_empty_regular {
-                        // Already sitting in an empty regular chat — pulse it instead of creating another
-                        let now = ui.input(|i| i.time);
-                        self.pulse_active_until = Some(now + 0.6);
-                        self.burst.spawn(new_btn.rect.center(), 8);
-                    } else {
-                        // Force regular mode so we don't accidentally create a new ephemeral
-                        self.ephemeral = false;
-                        self.burst.spawn(new_btn.rect.center(), 20);
-                        self.new_conversation();
-                    }
-                }
-                // Ephemeral button
-                let eph_label = if self.ephemeral { "Eph" } else if self.ephemeral_id.is_some() { "eph" } else { "Eph" };
-                let eph_btn = ui
-                    .add(
-                        egui::Button::new(egui::RichText::new(eph_label).size(11.0).color(
-                            if self.ephemeral {
-                                pal.accent
-                            } else if self.ephemeral_id.is_some() {
-                                pal.accent_dim
-                            } else {
-                                pal.text_muted
-                            },
-                        ))
-                        .fill(if self.ephemeral {
-                            pal.selected
-                        } else {
-                            egui::Color32::TRANSPARENT
-                        })
-                        .corner_radius(6.0),
-                    )
-                    .on_hover_text(match (&self.ephemeral_id, self.ephemeral) {
-                        (Some(_), true) => "Already in ephemeral chat",
-                        (Some(_), false) => "Resume ephemeral chat",
-                        (None, _) => "New ephemeral chat",
-                    });
-                if eph_btn.clicked() {
-                    if let Some(eph_id) = self.ephemeral_id.clone() {
-                        if !self.ephemeral {
-                            // Re-enter the existing ephemeral chat
-                            self.ephemeral = true;
-                            self.select_conversation(&eph_id);
-                        } else {
-                            // Already active ephemeral — pulse instead of recreating
-                            let now = ui.input(|i| i.time);
-                            self.pulse_active_until = Some(now + 0.6);
-                            self.burst.spawn(eph_btn.rect.center(), 8);
-                        }
-                    } else {
-                        self.ephemeral = true;
-                        self.burst.spawn(eph_btn.rect.center(), 20);
-                        self.new_conversation();
-                    }
-                }
-                // Search button
-                if ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new("/").size(14.0).color(pal.text_muted),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .corner_radius(6.0),
-                    )
-                    .on_hover_text("Search chats (Cmd+K)")
-                    .clicked()
-                {
-                    self.show_search = true;
-                    self.search_just_opened = true;
-                    self.search_query.clear();
-                    self.search_results.clear();
-                    self.search_selected_idx = 0;
-                    self.search_hover_lock = None;
                 }
             });
         });
@@ -2216,7 +2203,8 @@ impl ChatApp {
             Role::Assistant => ("Assistant", pal.role_assistant, pal.bg_assist_msg),
         };
         let empty = self.messages[idx].content.is_empty();
-        let copy_text = if role == Role::Assistant && !empty {
+        // Allow copying for both user and assistant messages
+        let copy_text = if !empty {
             Some(self.messages[idx].content.clone())
         } else {
             None
