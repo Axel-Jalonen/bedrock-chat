@@ -112,6 +112,30 @@
             display: block;
         }
         
+        .screenshots-comparison {
+            display: flex;
+            gap: 16px;
+            margin: 32px auto;
+            max-width: 1000px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .screenshots-comparison .screenshot {
+            flex: 1;
+            min-width: 300px;
+            max-width: 480px;
+            margin: 0;
+        }
+        
+        .screenshot-label {
+            text-align: center;
+            padding: 8px;
+            font-size: 0.85rem;
+            color: var(--muted);
+            border-top: 1px solid var(--border);
+        }
+        
         section {
             margin: 48px 0;
         }
@@ -236,8 +260,15 @@
             </div>
         </header>
 
-        <div class="screenshot">
-            <img src="public/screenshot.png" alt="Bedrock Chat screenshot">
+        <div class="screenshots-comparison">
+            <div class="screenshot">
+                <img src="public/screenshot.png" alt="Bedrock Chat screenshot">
+                <div class="screenshot-label">Bedrock Chat</div>
+            </div>
+            <div class="screenshot">
+                <img src="public/gpt-comparison.png" alt="ChatGPT comparison">
+                <div class="screenshot-label">ChatGPT</div>
+            </div>
         </div>
 
         <section>
