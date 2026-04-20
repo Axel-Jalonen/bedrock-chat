@@ -1878,6 +1878,9 @@ impl ChatApp {
         let pal = self.pal.clone();
         let full_rect = ui.max_rect();
         ui.painter().rect_filled(full_rect, 0.0, pal.bg_base);
+        
+        // Remove default spacing at the top
+        ui.spacing_mut().item_spacing.y = 0.0;
 
         // Subtle ephemeral indicator: dashed border + centered watermark text
         if self.ephemeral {
@@ -1961,6 +1964,8 @@ impl ChatApp {
             [r.left_top(), egui::pos2(r.right(), r.top())],
             egui::Stroke::new(1.0, pal.border),
         );
+        // Allocate space so the line isn't overlapped by messages
+        ui.allocate_space(egui::vec2(ui.available_width(), 1.0));
 
         let input_h = 100.0;
         let avail = ui.available_height() - input_h;
@@ -1998,6 +2003,7 @@ impl ChatApp {
         egui::Frame::new()
             .fill(pal.bg_topbar)
             .inner_margin(egui::Margin::symmetric(12, 8))
+            .outer_margin(egui::Margin::ZERO)
             .show(ui, |ui| {
                 // Force the frame content to take full width
                 ui.set_min_width(full_width - 24.0); // subtract margins
