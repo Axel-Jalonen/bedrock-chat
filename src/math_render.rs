@@ -3,7 +3,13 @@
 //! This module provides:
 //! - `render_math_ui`: renders a LaTeX string as laid-out math in an egui `Ui`
 //! - `parse_math_segments`: splits markdown content into text and math segments
+//!
+//! ## Performance
+//! Math layout results are cached in a global LRU-like cache so that ReX
+//! parsing + layout only happens once per unique (tex, font_size, display)
+//! triple.  Subsequent frames just re-paint the cached draw commands.
 
+use std::collections::HashMap;
 use eframe::egui;
 use rex::layout::Style;
 use rex::render::{Cursor, RenderSettings, Renderer};
@@ -15,6 +21,21 @@ use rex::fp::F24P8 as FontUnit;
 
 /// UNITS_PER_EM for the STIX2 font embedded in ReX.
 const UNITS_PER_EM: f64 = 1000.0;
+
+// ── Math layout cache ──────────────────────────────────────────────────
+
+/// Cache key: (preprocessed_tex, font_size_as_u16_bits, display_mode).
+type CacheKey = (String, u16, bool);
+
+/// Cache value: draw commands + (width, height).  None means "failed to parse".
+type CacheValue = Option<(Vec<DrawCmd>, f32, f32)>;
+
+/// Global cache for math layout results.  Avoids re-running ReX every frame.
+/// Capped at MAX_CACHE_ENTRIES to prevent unbounded memory growth.
+static MATH_CACHE: std::sync::LazyLock<std::sync::Mutex<HashMap<CacheKey, CacheValue>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
+
+const MAX_CACHE_ENTRIES: usize = 2048;
 
 // ── Draw commands ───────────────────────────────────────────────────────
 
@@ -150,6 +171,9 @@ impl Renderer for EguiRenderer {
 
 /// Pre-layout math: parse and get draw commands + size without painting.
 /// Returns (commands, width, height) or None on parse error.
+///
+/// Results are cached globally so that repeated calls with the same
+/// (tex, font_size, display) triple are essentially free.
 pub fn layout_math(
     tex: &str,
     font_size: f32,
@@ -157,23 +181,56 @@ pub fn layout_math(
 ) -> Option<(Vec<DrawCmd>, f32, f32)> {
     // Preprocess to handle unsupported commands
     let tex = preprocess_latex(tex);
-    
+    let key: CacheKey = (tex.clone(), font_size as u16, display);
+
+    // Fast path: check cache
+    {
+        let cache = MATH_CACHE.lock().unwrap();
+        if let Some(cached) = cache.get(&key) {
+            return cached.clone();
+        }
+    }
+
+    // Slow path: actually run ReX layout
+    let result = layout_math_uncached(&tex, font_size, display);
+
+    // Store in cache (evict if too large)
+    {
+        let mut cache = MATH_CACHE.lock().unwrap();
+        if cache.len() >= MAX_CACHE_ENTRIES {
+            // Simple eviction: clear everything.
+            // A proper LRU would be better but this is rare in practice.
+            cache.clear();
+        }
+        cache.insert(key, result.clone());
+    }
+
+    result
+}
+
+/// The actual ReX layout call, without caching.
+fn layout_math_uncached(
+    tex: &str,
+    font_size: f32,
+    display: bool,
+) -> Option<(Vec<DrawCmd>, f32, f32)> {
     // Catch panics from ReX (e.g. assertion failures on edge-case inputs)
+    let tex_owned = tex.to_string();
     let result = std::panic::catch_unwind(|| {
         let renderer = EguiRenderer::new(font_size as u16, display);
         let mut commands = Vec::new();
-        match renderer.render_to(&mut commands, &tex) {
+        match renderer.render_to(&mut commands, &tex_owned) {
             Ok(()) => {
                 let (w, h) = extract_canvas_size(&mut commands);
                 Some((commands, w, h))
             }
             Err(e) => {
-                tracing::warn!("ReX parse error for {:?}: {}", tex, e);
+                tracing::warn!("ReX parse error for {:?}: {}", tex_owned, e);
                 None
             }
         }
     });
-    
+
     match result {
         Ok(inner) => inner,
         Err(_) => {

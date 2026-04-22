@@ -200,6 +200,13 @@ pub struct ChatApp {
     messages: Vec<ChatMessage>,
     md_caches: HashMap<String, (u64, CommonMarkCache)>,
     streaming_md_cache: CommonMarkCache,
+    /// Cached rendered height (in pixels) for each message, keyed by message ID.
+    /// Used for viewport culling: off-screen messages allocate this height without
+    /// running expensive markdown + math rendering.
+    msg_heights: HashMap<String, f32>,
+    /// Last known chat pane width; when this changes, msg_heights is invalidated
+    /// because text wrapping changes message heights.
+    last_chat_width: f32,
     input: String,
     stream_rx: Option<mpsc::UnboundedReceiver<StreamToken>>,
     is_streaming: bool,
@@ -320,6 +327,8 @@ impl ChatApp {
             messages: Vec::new(),
             md_caches: HashMap::new(),
             streaming_md_cache: CommonMarkCache::default(),
+            msg_heights: HashMap::new(),
+            last_chat_width: 0.0,
             input: String::new(),
             stream_rx: None,
             is_streaming: false,
@@ -419,6 +428,7 @@ impl ChatApp {
             Ok(msgs) => {
                 self.messages = msgs;
                 self.md_caches.clear();
+                self.msg_heights.clear();
                 self.scroll_to_bottom = true;
             }
             Err(e) => {
@@ -484,6 +494,7 @@ impl ChatApp {
             self.active_id = None;
             self.messages.clear();
             self.md_caches.clear();
+            self.msg_heights.clear();
             self.conv_usage = TokenUsage::default();
             self.last_usage = None;
         }
@@ -748,6 +759,7 @@ impl ChatApp {
                 };
                 self.messages.clear();
                 self.md_caches.clear();
+                self.msg_heights.clear();
                 let compacted = ChatMessage::new(
                     &conv_id,
                     Role::Assistant,
@@ -1331,6 +1343,7 @@ impl ChatApp {
                                     self.active_id = None;
                                     self.messages.clear();
                                     self.md_caches.clear();
+                                    self.msg_heights.clear();
                                     self.conv_usage = TokenUsage::default();
                                     self.last_usage = None;
                                     self.ephemeral_id = None;
@@ -2168,16 +2181,52 @@ impl ChatApp {
     }
 
     fn render_messages(&mut self, ui: &mut egui::Ui) {
+        // Invalidate height cache on width change (text wrapping changes heights)
+        let current_width = ui.available_width();
+        if (current_width - self.last_chat_width).abs() > 1.0 {
+            self.msg_heights.clear();
+            self.last_chat_width = current_width;
+        }
+
         let output = egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .stick_to_bottom(!self.user_scrolled_up)
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 let side_pad = (ui.available_width() * 0.04).clamp(12.0, 40.0);
+                let content_width = ui.available_width() - side_pad * 2.0;
                 ui.add_space(8.0);
                 let n = self.messages.len();
+
+                // The clip rect tells us what's actually visible in the scroll area
+                let clip = ui.clip_rect();
+
                 for i in 0..n {
                     let streaming = i == n - 1 && self.is_streaming;
+                    let msg_id = self.messages[i].id.clone();
+                    let cached_height = self.msg_heights.get(&msg_id).copied();
+
+                    // If we have a cached height and the message is entirely off-screen,
+                    // just reserve the space instead of doing expensive rendering.
+                    // Never skip the currently-streaming message or messages without a
+                    // cached height (they need to be measured at least once).
+                    if !streaming {
+                        if let Some(h) = cached_height {
+                            let cursor_y = ui.cursor().top();
+                            // Account for the horizontal wrapper margins (~6px)
+                            let total_h = h + 6.0;
+                            if cursor_y + total_h < clip.top() - 200.0
+                                || cursor_y > clip.bottom() + 200.0
+                            {
+                                // Off-screen: allocate blank space
+                                ui.allocate_space(egui::vec2(content_width, total_h));
+                                continue;
+                            }
+                        }
+                    }
+
+                    // Render normally and record the height
+                    let before_y = ui.cursor().top();
                     ui.horizontal(|ui| {
                         ui.add_space(side_pad);
                         ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
@@ -2185,6 +2234,13 @@ impl ChatApp {
                             self.render_single_message(ui, i, streaming);
                         });
                     });
+                    let after_y = ui.cursor().top();
+                    let rendered_h = after_y - before_y;
+
+                    // Cache the measured height (skip for streaming - height changes)
+                    if !streaming && rendered_h > 0.0 {
+                        self.msg_heights.insert(msg_id, rendered_h);
+                    }
                 }
                 if self.scroll_to_bottom {
                     ui.scroll_to_cursor(Some(egui::Align::BOTTOM));
